@@ -1,0 +1,12 @@
+{
+  "name": "Remix Sehat Sathi",
+  "description": "Sehat Sathi - AI Rural Health Assistant for multilingual healthcare access, government health schemes, nearby care discovery, image assist, emergency pathways, and ASHA worker portal.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
