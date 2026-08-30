@@ -1,6 +1,16 @@
 import React from 'react';
-import { ArrowRight, Phone, FileText, MapPin, AlertTriangle, UserCheck } from 'lucide-react';
+import { ArrowRight, Phone, FileText, MapPin, UserCheck } from 'lucide-react';
 import { useLocation } from 'wouter';
+
+/* =============================================================
+   The next thing you can do.
+
+   These turn an answer into an action, which is the whole point of
+   the assistant. Emergency actions are the one case that gets the
+   siren colour, and they are never mixed in visually with the
+   ordinary ones — a person scanning in a panic must not have to
+   read to find the call button.
+   ============================================================= */
 
 export function ActionChips({ actions = [], onActionClick }) {
   const [, setLocation] = useLocation();
@@ -41,7 +51,11 @@ export function ActionChips({ actions = [], onActionClick }) {
   };
 
   return (
-    <div id="chips-action-suggestions" className="flex flex-wrap gap-2" data-testid="container-action-chips">
+    <div
+      id="chips-action-suggestions"
+      className="flex flex-wrap gap-2"
+      data-testid="container-action-chips"
+    >
       {actions.map((action, index) => {
         const Icon = getIcon(action.type);
         const isEmergency = action.type === 'call_emergency';
@@ -52,14 +66,15 @@ export function ActionChips({ actions = [], onActionClick }) {
             id={`btn-action-chip-${index}`}
             type="button"
             onClick={() => handleClick(action)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:-translate-y-0.5 active:scale-95 shadow-2xs ${
-              isEmergency
-                ? 'bg-[#b74636] text-[#fff7e9] hover:bg-[#9d3729]'
-                : 'bg-[#1f655d] text-[#f9f2df] hover:bg-[#18534c]'
-            }`}
+            className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border-[1.5px] px-3.5
+              text-[0.8rem] font-semibold transition-[transform,background-color] active:translate-y-px ${
+                isEmergency
+                  ? 'border-siren bg-siren text-white hover:bg-siren/90'
+                  : 'border-ink bg-ink text-paper hover:bg-seal hover:border-seal'
+              }`}
             data-testid={`chip-action-${index}`}
           >
-            <Icon size={13} />
+            <Icon size={13} aria-hidden="true" />
             <span>{action.label}</span>
           </button>
         );

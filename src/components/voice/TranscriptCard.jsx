@@ -1,8 +1,19 @@
 import React from 'react';
-import { Edit3, Check, RefreshCw } from 'lucide-react';
+import { RefreshCw, Check } from 'lucide-react';
+import { getT } from '@/services/i18n';
+
+/* =============================================================
+   What the phone thinks you said.
+
+   Speech recognition on Indian-language input over a patchy
+   connection is wrong often enough that showing the transcript back
+   is not a nicety — it is the only way a person can catch a
+   misheard symptom before advice gets built on top of it. Hence the
+   explicit confirm step rather than acting on the interim result.
+   ============================================================= */
 
 export function TranscriptCard({ transcript, interim, onEdit, onSubmit, onRetry, language = 'Hindi' }) {
-  const isHindi = language === 'हिन्दी' || language === 'Hindi';
+  const t = getT(language);
   const display = transcript || interim;
 
   if (!display) return null;
@@ -10,42 +21,50 @@ export function TranscriptCard({ transcript, interim, onEdit, onSubmit, onRetry,
   return (
     <div
       id="card-voice-transcript"
-      className="w-full rounded-2xl border border-[#ded5c2] bg-[#fbf8ef] p-4 shadow-sm appear"
+      className="card card-rail w-full p-5 appear"
+      style={{ '--rail': interim ? 'var(--color-asha)' : 'var(--color-seal)' }}
       data-testid="card-transcript"
+      aria-live="polite"
     >
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-[#8a6b4a]">
-          {isHindi ? 'आपकी आवाज़ का अनुवाद' : 'Detected Speech'}
-        </p>
-        <span className="text-[10px] rounded-full bg-[#dceee9] px-2 py-0.5 font-bold text-[#1f655d]">
-          {interim ? 'Live...' : 'Confirmed'}
+      <div className="flex items-center justify-between gap-3">
+        <p className="eyebrow">{t.youSaid}</p>
+        <span className={`pill ${interim ? 'text-asha' : 'text-seal'}`}>
+          {interim ? t.listening : t.confirmed || 'Confirmed'}
         </span>
       </div>
 
-      <p className="mt-2 text-base font-semibold leading-relaxed text-[#214e4a]">
-        "{display}"
+      <p className="mt-3 text-[1.05rem] font-medium leading-relaxed text-ink">
+        <span aria-hidden="true" className="text-ink-faint">“</span>
+        {display}
+        <span aria-hidden="true" className="text-ink-faint">”</span>
       </p>
 
-      {!interim && (
-        <div className="mt-3 flex items-center justify-end gap-2 border-t border-[#ded5c2] pt-2">
-          {onRetry && (
+      {!interim && (onRetry || onSubmit) ? (
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-rule pt-4">
+          {onRetry ? (
             <button
+              type="button"
               onClick={onRetry}
-              className="flex items-center gap-1 rounded-full border border-[#dacfb9] px-3 py-1 text-xs font-semibold text-[#5d726b] hover:bg-[#eee4d0]"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-rule px-4
+                text-[0.85rem] font-semibold text-ink-soft transition-colors hover:border-ink hover:text-ink"
             >
-              <RefreshCw size={13} /> {isHindi ? 'फिर से बोलें' : 'Retry'}
+              <RefreshCw size={14} aria-hidden="true" />
+              {t.retry}
             </button>
-          )}
-          {onSubmit && (
+          ) : null}
+          {onSubmit ? (
             <button
+              type="button"
               onClick={onSubmit}
-              className="flex items-center gap-1 rounded-full bg-[#1f655d] px-4 py-1 text-xs font-bold text-[#f9f2df] shadow-xs hover:bg-[#18534c]"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-ink px-5
+                text-[0.85rem] font-semibold text-paper transition-colors hover:bg-seal"
             >
-              <Check size={14} /> {isHindi ? 'सलाह लें' : 'Get Guidance'}
+              <Check size={15} aria-hidden="true" />
+              {t.getGuidance}
             </button>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -7,86 +7,100 @@ import {
   MapPin,
   Camera,
   User,
-  ShieldCheck,
   TrendingUp,
   UserCheck,
   Settings,
-  Siren
+  Siren,
+  Send,
+  CalendarDays,
 } from 'lucide-react';
 import { useAppState } from '@/state/store';
+import { Eyebrow, Stamp } from '@/components/ds';
 
 export function SideNav() {
   const [location] = useLocation();
   const { language, userRole } = useAppState();
-  const isHindi = language === 'हिन्दी' || language === 'Hindi';
+  const hi = language !== 'English';
 
   const citizenNav = [
-    { href: '/app', label: isHindi ? 'होम डैशबोर्ड' : 'Home Dashboard', icon: Home },
-    { href: '/assistant', label: isHindi ? 'बोलकर पूछें (Voice)' : 'AI Voice Assistant', icon: Bot, highlight: true },
-    { href: '/schemes', label: isHindi ? 'सरकारी योजनाएं' : 'Health Schemes', icon: FileText },
-    { href: '/care', label: isHindi ? 'पास का स्वास्थ्य केंद्र' : 'Nearby Healthcare', icon: MapPin },
-    { href: '/benefits', label: isHindi ? 'योजना लाभ ट्रैकर' : 'Benefit Tracker', icon: TrendingUp },
-    { href: '/image-assist', label: isHindi ? 'पर्ची / दवा फोटो जाँच' : 'Prescription Assist', icon: Camera },
-    { href: '/profile', label: isHindi ? 'मेरी स्वास्थ्य प्रोफ़ाइल' : 'Health Profile', icon: User },
-    { href: '/settings', label: isHindi ? 'सेटिंग्स व सहायता' : 'Settings & Offline', icon: Settings },
+    { href: '/app', label: hi ? 'होम' : 'Home', icon: Home },
+    { href: '/assistant', label: hi ? 'बोलकर पूछें' : 'Ask by voice', icon: Bot, accent: true },
+    { href: '/schemes', label: hi ? 'सरकारी योजनाएँ' : 'Government schemes', icon: FileText },
+    { href: '/care', label: hi ? 'पास का इलाज' : 'Care near you', icon: MapPin },
+    { href: '/benefits', label: hi ? 'लाभ ट्रैकर' : 'Benefit tracker', icon: TrendingUp },
+    { href: '/image-assist', label: hi ? 'पर्ची पढ़ें' : 'Read a prescription', icon: Camera },
+    { href: '/profile', label: hi ? 'मेरी प्रोफ़ाइल' : 'My profile', icon: User },
+    { href: '/settings', label: hi ? 'सेटिंग्स' : 'Settings', icon: Settings },
   ];
 
+  /* An ASHA worker browsing the citizen side keeps a way back into her
+     own register. These point at the portal, not at citizen screens
+     that happen to have similar names. */
   const ashaNav = [
-    { href: '/asha', label: 'ASHA Dashboard', icon: UserCheck, highlight: true },
-    { href: '/assistant', label: isHindi ? 'त्वरित सलाह टूल' : 'Clinical Assistant', icon: Bot },
-    { href: '/schemes', label: isHindi ? 'योजना गाइड' : 'Scheme Catalog', icon: FileText },
-    { href: '/care', label: isHindi ? 'रेफरल नेटवर्क' : 'Care Referral', icon: MapPin },
-    { href: '/emergency', label: isHindi ? 'आपातकालीन मोड' : 'Emergency Triage', icon: Siren },
-    { href: '/settings', label: isHindi ? 'सेटिंग्स' : 'Settings', icon: Settings }
+    { href: '/asha', label: hi ? 'डैशबोर्ड' : 'Dashboard', icon: UserCheck, accent: true },
+    { href: '/asha/alerts', label: hi ? 'सूचनाएँ' : 'Alerts', icon: Siren },
+    { href: '/asha/referrals', label: hi ? 'रेफरल' : 'Referrals', icon: Send },
+    { href: '/asha/healthcare', label: hi ? 'सुविधाएँ' : 'Facilities', icon: MapPin },
+    { href: '/asha/schemes', label: hi ? 'योजनाएँ' : 'Schemes', icon: FileText },
+    { href: '/asha/camps', label: hi ? 'शिविर' : 'Camps', icon: CalendarDays },
+    { href: '/asha/profile', label: hi ? 'मेरा खाता' : 'My account', icon: User },
   ];
 
   const items = userRole === 'asha' ? ashaNav : citizenNav;
 
+  const isActive = (href) =>
+    location === href || (href !== '/app' && href !== '/' && location.startsWith(href));
+
   return (
     <aside
       id="sidebar-navigation"
-      className="hidden w-64 shrink-0 border-r border-[#ded5c2] bg-[#f3eddf]/90 p-5 md:block min-h-[calc(100vh-74px)]"
+      className="hidden min-h-[calc(100vh-72px)] w-64 shrink-0 border-r border-rule bg-paper-3 p-4 md:block"
     >
-      <div className="sticky top-24">
-        <p className="mb-4 px-3 text-[10px] font-extrabold uppercase tracking-widest text-[#8a6b4a]">
-          {userRole === 'asha' ? 'ASHA Clinical Tools' : (isHindi ? 'आपकी स्वास्थ्य सेवा' : 'Health Services')}
-        </p>
+      <div className="sticky top-[88px]">
+        <Eyebrow className="px-3">
+          {userRole === 'asha'
+            ? hi ? 'आशा उपकरण' : 'ASHA tools'
+            : hi ? 'स्वास्थ्य सेवाएँ' : 'Health services'}
+        </Eyebrow>
 
-        <nav className="space-y-1.5">
+        <nav className="mt-4 space-y-1">
           {items.map((item) => {
-            const active = location === item.href || (item.href !== '/app' && item.href !== '/' && location.startsWith(item.href));
+            const active = isActive(item.href);
             const Icon = item.icon;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 text-xs font-bold transition ${
+                aria-current={active ? 'page' : undefined}
+                className={`flex min-h-[3rem] items-center gap-3 rounded-sm px-3 text-sm font-semibold transition ${
                   active
-                    ? 'bg-[#1f655d] text-[#f9f2df] shadow-sm'
-                    : item.highlight
-                    ? 'bg-[#dceee9] text-[#1f655d] hover:bg-[#cee4de]'
-                    : 'text-[#485f57] hover:bg-[#e8dfce]'
+                    ? 'bg-ink text-paper'
+                    : item.accent
+                    ? 'bg-asha-soft text-asha hover:bg-asha-soft/70'
+                    : 'text-ink-soft hover:bg-paper-2 hover:text-ink'
                 }`}
                 data-testid={`link-side-${item.href.replace('/', '') || 'root'}`}
               >
-                <Icon size={18} className={active ? 'text-[#f9f2df]' : 'text-[#1f655d]'} />
-                <span>{item.label}</span>
+                <Icon
+                  size={18}
+                  className={`shrink-0 ${active ? 'text-paper' : item.accent ? 'text-asha' : 'text-seal'}`}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        {/* Safe Care Footer Box */}
-        <div className="mt-8 rounded-3xl bg-[#e6dac7] p-4 text-xs">
-          <div className="flex items-center gap-2 font-bold text-[#544133]">
-            <ShieldCheck size={18} className="text-[#9b6242]" />
-            <span>{isHindi ? 'सुरक्षित व सत्यापित' : 'Official Health Data'}</span>
-          </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-[#756151]">
-            {isHindi
-              ? 'राष्ट्रीय स्वास्थ्य मिशन (NHM) व MoHFW के सत्यापित नियमों पर आधारित।'
-              : 'Directly grounded in National Health Mission protocols & Gov portals.'}
+        {/* Where the data comes from, stated in the chrome so it is
+            never a question. */}
+        <div className="mt-8 rounded-card border border-rule bg-paper-2 p-4">
+          <Stamp kind="verified" label="Data source" source="NHM · MoHFW" />
+          <p className="mt-4 text-[0.8rem] leading-relaxed text-ink-faint">
+            {hi
+              ? 'योजना और सुविधा की जानकारी राष्ट्रीय स्वास्थ्य मिशन और MoHFW के स्रोतों से।'
+              : 'Scheme and facility information comes from National Health Mission and MoHFW sources.'}
           </p>
         </div>
       </div>

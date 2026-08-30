@@ -1,62 +1,105 @@
 import React from 'react';
 import { Mic, MicOff, Loader2, Radio } from 'lucide-react';
 
-export function MicButton({ isListening, isLoading, onClick, continuousMode = false, size = 'large', className = '' }) {
+/* =============================================================
+   The microphone.
+
+   This is the product's primary verb — for most users it is the
+   only control they will ever press, and they will press it while
+   standing up, holding a child, in bright sun. So it is deliberately
+   the largest, highest-contrast object on any screen it appears on.
+
+   Idle is ink (calm, confident, obviously pressable). Listening is
+   ASHA magenta with a live pulse, so there is never any doubt about
+   whether the phone is actually hearing you.
+   ============================================================= */
+
+const SIZES = {
+  large: { box: 'h-40 w-32', boxActive: 'h-44 w-36', icon: 34, pad: 'p-3.5' },
+  small: { box: 'h-28 w-24', boxActive: 'h-30 w-26', icon: 26, pad: 'p-2.5' },
+};
+
+export function MicButton({
+  isListening,
+  isLoading,
+  onClick,
+  continuousMode = false,
+  size = 'large',
+  language = 'Hindi',
+  className = '',
+}) {
+  const hi = language !== 'English';
+  const t = (en, dev) => (hi ? dev : en);
+  const s = SIZES[size] || SIZES.large;
+
+  const label = isLoading
+    ? t('Working', 'सुन रही हूँ')
+    : isListening
+    ? t('Listening…', 'सुन रही हूँ…')
+    : t('Tap to speak', 'बोलने के लिए दबाएँ');
+
+  const sub = isListening
+    ? t('Tap again to pause', 'रोकने के लिए फिर दबाएँ')
+    : t('In your own language', 'अपनी भाषा में');
+
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className={`flex flex-col items-center gap-3 ${className}`}>
       <button
         id="button-voice-microphone"
         type="button"
         onClick={onClick}
         disabled={isLoading}
-        aria-label={isListening ? 'Stop voice conversation' : 'Start speaking'}
-        className={`group relative flex flex-col items-center justify-center rounded-3xl p-6 transition-all duration-300 active:scale-95 disabled:opacity-50 ${
+        aria-label={
           isListening
-            ? 'w-36 h-44 bg-gradient-to-b from-[#c84630] to-[#9b2a1a] text-[#fff5e6] shadow-[0_0_40px_rgba(200,70,48,0.55)] border-4 border-[#ffb29d]'
-            : 'w-32 h-40 bg-gradient-to-b from-[#e76f46] to-[#c9522b] text-[#fff5e6] hover:from-[#f07b53] hover:to-[#d65c34] shadow-xl border-4 border-[#3d837a]/40 hover:border-[#3d837a]'
-        } ${className}`}
+            ? t('Stop listening', 'सुनना बंद करें')
+            : t('Start speaking', 'बोलना शुरू करें')
+        }
+        aria-pressed={!!isListening}
+        className={`group relative flex flex-col items-center justify-center rounded-[1.75rem] border-[1.5px]
+          transition-[transform,background-color,border-color] duration-200 active:translate-y-px
+          disabled:cursor-not-allowed disabled:opacity-60
+          ${
+            isListening
+              ? `${s.boxActive} is-listening border-asha bg-asha text-white`
+              : `${s.box} border-ink bg-ink text-paper hover:bg-seal hover:border-seal`
+          }`}
         data-testid="button-mic"
       >
-        {/* Animated Sound Wave Rings when active */}
-        {isListening && (
-          <>
-            <span className="absolute -inset-2.5 rounded-[2rem] border-2 border-[#e76f46] opacity-60 animate-ping" />
-            <span className="absolute -inset-5 rounded-[2.5rem] border border-[#f68957] opacity-30 animate-pulse" />
-          </>
-        )}
-
-        {/* Vertical Icon Layout */}
-        <div className="relative z-10 flex flex-col items-center gap-2">
-          <div className={`grid place-items-center rounded-full p-3 transition-transform ${
-            isListening ? 'bg-[#7d2013] scale-110' : 'bg-[#ab3c1b] group-hover:scale-105'
-          }`}>
+        <span className="relative z-10 flex flex-col items-center gap-2.5">
+          <span
+            className={`grid place-items-center rounded-full ${s.pad} transition-transform duration-200 ${
+              isListening
+                ? 'scale-105 bg-white/15'
+                : 'bg-white/10 group-hover:scale-105'
+            }`}
+          >
             {isLoading ? (
-              <Loader2 size={36} className="animate-spin text-white" />
+              <Loader2 size={s.icon} className="animate-spin" aria-hidden="true" />
             ) : isListening ? (
-              <MicOff size={36} className="text-[#ffe0d6] animate-pulse" />
+              <MicOff size={s.icon} strokeWidth={2.1} aria-hidden="true" />
             ) : (
-              <Mic size={36} className="text-white" />
+              <Mic size={s.icon} strokeWidth={2.1} aria-hidden="true" />
             )}
-          </div>
+          </span>
 
-          <div className="text-center">
-            <span className="block text-xs font-black tracking-wider uppercase">
-              {isLoading ? 'Processing' : isListening ? 'Listening…' : 'Tap to Speak'}
+          <span className="px-2 text-center">
+            <span className="block font-mono text-[0.66rem] font-medium uppercase tracking-[0.14em]">
+              {label}
             </span>
-            <span className="block text-[10px] font-semibold opacity-85">
-              {isListening ? 'Tap to Pause' : 'Continuous AI Mode'}
-            </span>
-          </div>
-        </div>
+            <span className="mt-1 block text-[0.7rem] leading-snug opacity-70">{sub}</span>
+          </span>
+        </span>
       </button>
 
-      {/* Mode pill */}
-      {isListening && (
-        <div className="flex items-center gap-1.5 rounded-full bg-[#faeae6] px-3 py-1 text-[11px] font-bold text-[#b74636] border border-[#f1c3b7] animate-fade-in">
-          <Radio size={12} className="animate-pulse" />
-          <span>Hands-Free Auto-Listening Active</span>
-        </div>
-      )}
+      {/* Only shown when it is true, because a claim about hands-free
+          listening that isn't actually happening is a lie about a
+          microphone. */}
+      {isListening && continuousMode ? (
+        <span className="pill border-asha text-asha">
+          <Radio size={12} aria-hidden="true" />
+          {t('Hands-free — keep talking', 'हैंड्स-फ़्री — बोलती रहें')}
+        </span>
+      ) : null}
     </div>
   );
 }

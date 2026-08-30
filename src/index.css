@@ -1,114 +1,550 @@
 @import "tailwindcss";
 
+/* =============================================================
+   SEHAT SATHI — "FIELD REGISTER" DESIGN SYSTEM
+
+   Grounded in the material world of the subject: the ASHA
+   worker's ruled paper register, the Mother & Child Protection
+   card, the government verification stamp, and the magenta of
+   the ASHA uniform.
+
+   Thesis: this product only says what it can prove. So
+   verified-vs-inferred is a visible design object, not fine print.
+   ============================================================= */
+
+@theme {
+  /* ---------- Surfaces: register paper, cool not cream ---------- */
+  --color-paper: #e8ebe3;
+  --color-paper-2: #f2f4ee;
+  --color-paper-3: #dde2d6;
+
+  /* ---------- Ink ---------- */
+  --color-ink: #101613;
+  --color-ink-panel: #151d19;
+  --color-ink-soft: #47524b;
+  --color-ink-faint: #5f6a63;
+
+  /* ---------- Printed rules ---------- */
+  --color-rule: #c3cabd;
+  --color-rule-soft: #d5dbcf;
+
+  /* ---------- ASHA magenta: the signature accent ---------- */
+  --color-asha: #c81e63;
+  --color-asha-soft: #f9e3ec;
+  --color-asha-bright: #ff5e97;
+
+  /* ---------- Institutional teal: "official / verified" ---------- */
+  --color-seal: #0b4f47;
+  --color-seal-soft: #d9e6e2;
+  --color-seal-bright: #4fbfae;
+
+  /* ---------- Emergency vermilion: 108 / SOS ONLY ---------- */
+  --color-siren: #c9371a;
+  --color-siren-soft: #fbe2da;
+
+  /* ---------- Caution amber ---------- */
+  --color-amber: #9a6510;
+  --color-amber-soft: #f6e8cd;
+
+  /* ---------- Type ---------- */
+  --font-display: "Bricolage Grotesque", "Anek Devanagari", Georgia, serif;
+  --font-sans: "Anek Latin", "Anek Devanagari", "Anek Bangla", "Anek Tamil",
+    "Anek Telugu", "Anek Gujarati", "Anek Kannada", "Anek Gurmukhi",
+    "Anek Odia", system-ui, -apple-system, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---------- Radius ---------- */
+  --radius-card: 1.15rem;
+  --radius-sm: 0.6rem;
+
+  /* ---------- Elevation ---------- */
+  --shadow-rest: 0 1px 0 rgb(255 255 255 / 0.5) inset,
+                 0 10px 28px -14px rgb(16 22 19 / 0.18);
+  --shadow-lift: 0 1px 0 rgb(255 255 255 / 0.7) inset,
+                 0 26px 50px -20px rgb(16 22 19 / 0.3);
+
+  /* ---------- Register rhythm ---------- */
+  --register-step: 2.75rem;
+}
+
+/* =============================================================
+   BASE
+   ============================================================= */
+
 @layer base {
-  :root {
-    --background: 43 47% 95%;
-    --foreground: 176 29% 17%;
-    --border: 40 21% 84%;
-    --input: 40 21% 84%;
-    --ring: 172 40% 38%;
-    --card: 44 45% 98%;
-    --card-foreground: 176 29% 17%;
-    --card-border: 40 23% 87%;
-    --popover: 44 45% 98%;
-    --popover-foreground: 176 29% 17%;
-    --popover-border: 40 23% 87%;
-    --primary: 172 41% 31%;
-    --primary-foreground: 45 44% 97%;
-    --secondary: 35 55% 88%;
-    --secondary-foreground: 176 29% 17%;
-    --muted: 42 28% 91%;
-    --muted-foreground: 176 12% 41%;
-    --accent: 19 76% 57%;
-    --accent-foreground: 44 45% 98%;
-    --destructive: 1 64% 45%;
-    --destructive-foreground: 45 44% 97%;
-    --app-font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --app-font-serif: 'Fraunces', Georgia, serif;
-    --app-font-mono: 'DM Sans', sans-serif;
-    --radius: 1rem;
-    --shadow-soft: 0 16px 45px hsl(172 30% 22% / 0.08);
-    --shadow-lift: 0 18px 35px hsl(172 30% 22% / 0.14);
-  }
-
-  .dark {
-    --background: 176 28% 11%;
-    --foreground: 43 47% 95%;
-    --border: 176 16% 26%;
-    --input: 176 16% 26%;
-    --ring: 35 72% 63%;
-    --card: 176 23% 15%;
-    --card-foreground: 43 47% 95%;
-    --card-border: 176 16% 26%;
-    --popover: 176 23% 15%;
-    --popover-foreground: 43 47% 95%;
-    --popover-border: 176 16% 26%;
-    --primary: 35 72% 63%;
-    --primary-foreground: 176 28% 11%;
-    --secondary: 176 18% 24%;
-    --secondary-foreground: 43 47% 95%;
-    --muted: 176 18% 21%;
-    --muted-foreground: 43 15% 71%;
-    --accent: 19 76% 60%;
-    --accent-foreground: 176 28% 11%;
-    --destructive: 1 64% 55%;
-    --destructive-foreground: 45 44% 97%;
-  }
-
-  * {
-    border-color: hsl(var(--border));
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-rule);
   }
 
   html {
-    background-color: hsl(var(--background));
+    background-color: var(--color-paper);
+    -webkit-text-size-adjust: 100%;
+    /* Parallax layers and the language marquee both translate past
+       the viewport edge. Without this they create a phantom
+       horizontal scrollbar. */
+    overflow-x: hidden;
   }
 
   body {
-    background-color: hsl(var(--background));
-    font-family: var(--app-font-sans);
-    color: hsl(var(--foreground));
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
     min-width: 320px;
+    overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  button, a, select {
+  /* Display type is set tight and large by default. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 0.98;
+    text-wrap: balance;
+  }
+
+  /* Devanagari needs more leading and no negative tracking. */
+  :lang(hi) h1,
+  :lang(hi) h2,
+  :lang(hi) h3,
+  .is-deva h1,
+  .is-deva h2,
+  .is-deva h3 {
+    letter-spacing: -0.01em;
+    line-height: 1.22;
+  }
+
+  button,
+  a,
+  select,
+  input,
+  textarea {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Visible keyboard focus everywhere. Never remove this. */
+  :focus-visible {
+    outline: 2px solid var(--color-asha);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-asha);
+    color: #fff;
   }
 }
 
-.font-display {
-  font-family: var(--app-font-serif);
+/* =============================================================
+   THE REGISTER — ruled paper as the organising structure
+   ============================================================= */
+
+@layer components {
+  /* Faint ruled texture, like the printed lines on register stock. */
+  .reg-paper {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .reg-paper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--color-rule-soft) 0 1px,
+      transparent 1px var(--register-step)
+    );
+    opacity: 0.55;
+    mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  /* A full-bleed section divider that carries its own row index. */
+  .reg-rule {
+    position: relative;
+    height: 1px;
+    background: var(--color-rule);
+    border: 0;
+  }
+
+  /* Mono row index sitting in the left gutter of the register. */
+  .reg-index {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Small caps label. Used for field names, as on a government form. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
 }
 
-.text-balance {
-  text-wrap: balance;
+/* =============================================================
+   THE VERIFICATION STAMP — the signature element
+
+   Any data the system can prove carries a stamp with its source.
+   Anything inferred carries a visibly different hollow stamp.
+   ============================================================= */
+
+@layer components {
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border: 1.5px solid currentColor;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+    transform: rotate(-2.5deg);
+    /* the slight ink bleed of a real rubber stamp */
+    box-shadow: 0 0 0 2.5px rgb(255 255 255 / 0.35);
+  }
+
+  /* Proven: sourced from a verified government dataset. */
+  .stamp-verified {
+    color: var(--color-seal);
+    background: rgb(11 79 71 / 0.06);
+  }
+
+  /* Inferred: AI-assisted, never a guarantee. Hollow and dashed. */
+  .stamp-inferred {
+    color: var(--color-amber);
+    background: transparent;
+    border-style: dashed;
+  }
+
+  /* Nothing found. Designed as a confident statement, not an apology. */
+  .stamp-none {
+    color: var(--color-ink-faint);
+    background: transparent;
+    border-style: dotted;
+  }
+
+  .stamp-urgent {
+    color: var(--color-siren);
+    background: rgb(201 55 26 / 0.07);
+  }
+
+  /* On dark ink panels. */
+  .ink-panel .stamp-verified {
+    color: var(--color-seal-bright);
+    background: rgb(79 191 174 / 0.1);
+  }
 }
 
-.app-shell {
-  background: radial-gradient(circle at 86% 4%, hsl(35 75% 72% / 0.20), transparent 24rem),
-              radial-gradient(circle at 8% 27%, hsl(172 40% 64% / 0.10), transparent 28rem),
-              hsl(var(--background));
+/* =============================================================
+   CARDS — with the left-edge register rail
+   ============================================================= */
+
+@layer components {
+  .card {
+    position: relative;
+    background: var(--color-paper-2);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-rest);
+  }
+
+  /* The rail: a coloured edge encoding status, like the tab on a
+     register page. Set --rail to change it. */
+  .card-rail {
+    padding-left: 1.15rem;
+  }
+
+  .card-rail::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.9rem;
+    bottom: 0.9rem;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: var(--rail, var(--color-rule));
+  }
+
+  .card-lift {
+    transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1),
+      box-shadow 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+    will-change: transform;
+  }
+
+  .card-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lift);
+  }
+
+  /* Dark punctuation band. */
+  .ink-panel {
+    background: var(--color-ink-panel);
+    color: var(--color-paper);
+  }
+
+  .ink-panel .eyebrow,
+  .ink-panel .reg-index {
+    color: rgb(232 235 227 / 0.55);
+  }
+
+  .ink-panel .reg-rule {
+    background: rgb(232 235 227 / 0.16);
+  }
 }
 
-.paper-grain {
-  position: relative;
-  isolation: isolate;
+/* =============================================================
+   CONTROLS — large touch targets for field use
+   ============================================================= */
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 3rem;
+    padding: 0 1.35rem;
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.2s ease, background-color 0.2s ease,
+      border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .btn:active {
+    transform: translateY(1px);
+  }
+
+  /* Thumb-friendly primary action. */
+  .btn-lg {
+    min-height: 3.5rem;
+    padding: 0 1.75rem;
+    font-size: 1rem;
+  }
+
+  .btn-primary {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-color: var(--color-ink);
+  }
+
+  .btn-primary:hover {
+    background: var(--color-seal);
+    border-color: var(--color-seal);
+  }
+
+  .btn-asha {
+    background: var(--color-asha);
+    color: #fff;
+    border-color: var(--color-asha);
+  }
+
+  .btn-asha:hover {
+    background: #ad1854;
+    border-color: #ad1854;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: var(--color-rule);
+  }
+
+  .btn-outline:hover {
+    border-color: var(--color-ink);
+    background: rgb(16 22 19 / 0.04);
+  }
+
+  .btn-siren {
+    background: var(--color-siren);
+    color: #fff;
+    border-color: var(--color-siren);
+  }
+
+  .btn-siren:hover {
+    background: #ac2d14;
+    border-color: #ac2d14;
+  }
+
+  .ink-panel .btn-outline {
+    color: var(--color-paper);
+    border-color: rgb(232 235 227 / 0.3);
+  }
+
+  .ink-panel .btn-outline:hover {
+    border-color: var(--color-paper);
+    background: rgb(232 235 227 / 0.08);
+  }
+
+  /* Status pill. Reads at a glance for a busy field worker. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+
+  /* Form field, sized for a thumb on a cheap Android. */
+  .field {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-paper-2);
+    border: 1.5px solid var(--color-rule);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    color: var(--color-ink);
+    transition: border-color 0.18s ease, background-color 0.18s ease;
+  }
+
+  .field::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--color-seal);
+    background: #fff;
+  }
 }
 
-.paper-grain::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: .16;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+/* =============================================================
+   TYPE TREATMENTS
+   ============================================================= */
+
+@layer components {
+  /* Oversized editorial headline. */
+  .display-xl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2.75rem, 11vw, 8.5rem);
+    line-height: 0.9;
+    letter-spacing: -0.045em;
+  }
+
+  .display-lg {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2rem, 6vw, 4.25rem);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+  }
+
+  .display-md {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3.6vw, 2.5rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+  }
+
+  /* Devanagari override: the tight tracking above breaks the script. */
+  .is-deva .display-xl,
+  .is-deva .display-lg,
+  .is-deva .display-md {
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+  }
+
+  .is-deva .display-xl {
+    font-size: clamp(2rem, 7.5vw, 5.5rem);
+  }
+
+  /* Big tabular figure, for register counts. */
+  .figure {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    line-height: 0.9;
+  }
+
+  .lede {
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    color: var(--color-ink-soft);
+    max-width: 46ch;
+  }
 }
 
+/* =============================================================
+   MOTION — showcase outside, calm inside
+
+   Parallax and reveals belong on the public pages. Inside the
+   portal, motion is limited to fast state feedback.
+   ============================================================= */
+
+/* Scroll-triggered reveal. JS adds .is-in via IntersectionObserver. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1),
+    transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Parallax layer. JS writes --py. */
+.parallax {
+  transform: translate3d(0, var(--py, 0px), 0);
+  will-change: transform;
+}
+
+/* Legacy entrance used across existing pages. Retained so pages
+   that have not been converted yet still animate in. */
+.appear {
+  animation: appear 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.appear-delay-1 { animation-delay: 0.07s; }
+.appear-delay-2 { animation-delay: 0.14s; }
+.appear-delay-3 { animation-delay: 0.21s; }
+
+@keyframes appear {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Legacy hover card used across existing pages. */
 .lift-card {
-  box-shadow: var(--shadow-soft);
-  transition: transform .22s ease, box-shadow .22s ease;
+  box-shadow: var(--shadow-rest);
+  transition: transform 0.24s ease, box-shadow 0.24s ease;
 }
 
 .lift-card:hover {
@@ -116,73 +552,109 @@
   box-shadow: var(--shadow-lift);
 }
 
-.appear {
-  animation: appear .45s ease both;
+/* Listening state for the microphone. */
+@keyframes listening {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(200 30 99 / 0.35); }
+  50% { box-shadow: 0 0 0 16px rgb(200 30 99 / 0); }
 }
 
-.appear-delay-1 {
-  animation-delay: .07s;
+.is-listening {
+  animation: listening 1.6s ease-in-out infinite;
 }
 
-.appear-delay-2 {
-  animation-delay: .14s;
+/* Live waveform bars in the hero voice card. */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.28); }
+  50% { transform: scaleY(1); }
 }
 
-.appear-delay-3 {
-  animation-delay: .21s;
+.wave-bar {
+  transform-origin: center;
+  animation: wave 1.1s ease-in-out infinite;
 }
 
-@keyframes appear {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Bottom-anchored VU bars for the "is it hearing me?" indicator.
+   Defined here rather than as an arbitrary Tailwind animation so the
+   keyframes are guaranteed to be emitted. */
+@keyframes vu {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
 }
 
-@keyframes breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: .4;
-  }
-  50% {
-    transform: scale(1.12);
-    opacity: .85;
-  }
+.vu-bar {
+  transform-origin: bottom;
+  animation: vu 0.62s ease-in-out infinite;
 }
 
-@keyframes listen {
-  0%, 100% {
-    box-shadow: 0 0 0 0 hsl(19 76% 57% / .35), 0 16px 24px hsl(172 30% 22% / .14);
-  }
-  50% {
-    box-shadow: 0 0 0 18px hsl(19 76% 57% / 0), 0 20px 30px hsl(172 30% 22% / .20);
-  }
+/* Marquee for the trust strip. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
-.voice-ring {
-  animation: listen 1.65s ease-in-out infinite;
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 38s linear infinite;
 }
 
-.voice-ring::before {
-  content: '';
-  position: absolute;
-  inset: -15px;
-  border: 1px solid hsl(19 76% 57% / .28);
-  border-radius: 999px;
-  animation: breathe 1.65s ease-in-out infinite;
+/* =============================================================
+   LAYOUT HELPERS
+   ============================================================= */
+
+.shell {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
 }
 
+@media (min-width: 768px) {
+  .shell { padding-inline: 2rem; }
+}
+
+@media (min-width: 1280px) {
+  .shell { padding-inline: 3rem; }
+}
+
+/* Clears the fixed bottom nav on mobile plus the home indicator. */
 .safe-area-bottom {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+.pad-bottom-nav {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
 @media (min-width: 768px) {
-  .desktop-content {
-    max-width: 1160px;
-    margin-inline: auto;
+  .pad-bottom-nav { padding-bottom: 3rem; }
+}
+
+/* =============================================================
+   REDUCED MOTION — honoured, not just declared
+   ============================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .parallax {
+    transform: none !important;
+  }
+
+  .marquee-track {
+    animation: none;
+    transform: none;
   }
 }

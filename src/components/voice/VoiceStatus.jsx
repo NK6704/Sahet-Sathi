@@ -1,27 +1,56 @@
 import React from 'react';
+import { getT } from '@/services/i18n';
+
+/* =============================================================
+   The listening indicator.
+
+   Its whole job is to answer one anxious question — "is it hearing
+   me?" — without words, because the person is mid-sentence and not
+   reading. Live bars while listening; a quiet instruction when not.
+   ============================================================= */
+
+const BARS = [
+  { h: 'h-2.5', delay: '100ms' },
+  { h: 'h-6', delay: '220ms' },
+  { h: 'h-4', delay: '330ms' },
+  { h: 'h-5', delay: '440ms' },
+  { h: 'h-2', delay: '260ms' },
+];
 
 export function VoiceStatus({ isListening, language = 'Hindi' }) {
-  const isHindi = language === 'हिन्दी' || language === 'Hindi';
+  const t = getT(language);
 
   if (!isListening) {
     return (
-      <p id="label-voice-status" className="text-xs font-semibold text-[#637d74]" data-testid="status-voice-idle">
-        {isHindi ? 'माइक दबाकर अपनी भाषा में पूछें' : 'Tap microphone and speak in your language'}
+      <p
+        id="label-voice-status"
+        className="text-[0.85rem] font-medium text-ink-faint"
+        data-testid="status-voice-idle"
+      >
+        {t.tapToSpeak}
       </p>
     );
   }
 
   return (
-    <div id="container-voice-active" className="flex flex-col items-center gap-2" data-testid="status-voice-listening">
-      <div className="flex items-end gap-1.5 h-6">
-        <span className="w-1.5 rounded-full bg-[#f68957] animate-[bounce_0.6s_infinite_100ms] h-3" />
-        <span className="w-1.5 rounded-full bg-[#f68957] animate-[bounce_0.6s_infinite_200ms] h-6" />
-        <span className="w-1.5 rounded-full bg-[#f68957] animate-[bounce_0.6s_infinite_300ms] h-4" />
-        <span className="w-1.5 rounded-full bg-[#f68957] animate-[bounce_0.6s_infinite_400ms] h-5" />
-        <span className="w-1.5 rounded-full bg-[#f68957] animate-[bounce_0.6s_infinite_250ms] h-2" />
+    <div
+      id="container-voice-active"
+      className="flex flex-col items-center gap-2"
+      data-testid="status-voice-listening"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex h-6 items-end gap-1.5" aria-hidden="true">
+        {BARS.map((b, i) => (
+          <span
+            key={i}
+            className={`vu-bar w-1.5 rounded-full bg-asha ${b.h}`}
+            style={{ animationDelay: b.delay }}
+          />
+        ))}
       </div>
-      <span className="text-xs font-bold text-[#b74636] animate-pulse">
-        {isHindi ? 'हम सुन रहे हैं… बोलें' : 'Listening… Please speak'}
+      <span className="font-mono text-[0.7rem] font-medium uppercase tracking-[0.14em] text-asha">
+        {t.listening}
       </span>
     </div>
   );
