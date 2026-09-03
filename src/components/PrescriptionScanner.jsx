@@ -75,7 +75,7 @@ export default function PrescriptionScanner({ language: propLanguage }) {
   return (
     <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl border border-emerald-100 overflow-hidden appear">
       {/* Top Header */}
-      <div className="bg-gradient-to-r from-[#1f655d] to-[#2a7a70] text-[#f9f2df] p-5">
+      <div className="bg-gradient-to-r from-seal to-seal text-paper-2 p-5">
         <div className="flex items-center gap-2.5">
           <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
             <Stethoscope size={24} />
@@ -98,7 +98,7 @@ export default function PrescriptionScanner({ language: propLanguage }) {
           className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
             image 
               ? 'border-emerald-300 bg-emerald-50/40' 
-              : 'border-gray-300 bg-gray-50/60 hover:border-[#1f655d] hover:bg-emerald-50/20'
+              : 'border-gray-300 bg-gray-50/60 hover:border-seal hover:bg-emerald-50/20'
           }`}
         >
           {image ? (
@@ -108,13 +108,13 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                 alt="Prescription preview" 
                 className="max-h-64 mx-auto rounded-xl object-contain shadow-sm border border-gray-200" 
               />
-              <p className="mt-2 text-xs font-semibold text-[#1f655d] underline">
+              <p className="mt-2 text-xs font-semibold text-seal underline">
                 {t.changePhoto}
               </p>
             </div>
           ) : (
             <div className="text-gray-500 flex flex-col items-center gap-3 py-4">
-              <div className="h-14 w-14 rounded-2xl bg-[#eef5f1] text-[#1f655d] flex items-center justify-center shadow-xs">
+              <div className="h-14 w-14 rounded-2xl bg-seal-soft text-seal flex items-center justify-center shadow-xs">
                 <Camera size={28} />
               </div>
               <div>
@@ -142,7 +142,7 @@ export default function PrescriptionScanner({ language: propLanguage }) {
           <button
             onClick={handleAnalyze}
             disabled={loading}
-            className="w-full bg-[#1f655d] text-[#f9f2df] py-3.5 rounded-2xl font-bold hover:bg-[#18534c] active:scale-[0.99] disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2.5 text-sm"
+            className="w-full bg-seal text-paper-2 py-3.5 rounded-2xl font-bold hover:bg-seal active:scale-[0.99] disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2.5 text-sm"
           >
             {loading ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}
             <span>
@@ -184,25 +184,25 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2.5 text-xs text-gray-700">
                   {result.patient_info.hospital && (
                     <div className="flex items-center gap-1.5">
-                      <Building2 size={14} className="text-[#1f655d] shrink-0" />
+                      <Building2 size={14} className="text-seal shrink-0" />
                       <span className="font-semibold">{result.patient_info.hospital}</span>
                     </div>
                   )}
                   {result.patient_info.doctor && (
                     <div className="flex items-center gap-1.5">
-                      <User size={14} className="text-[#1f655d] shrink-0" />
+                      <User size={14} className="text-seal shrink-0" />
                       <span>{t.doctor}: <strong className="font-semibold">{result.patient_info.doctor}</strong></span>
                     </div>
                   )}
                   {result.patient_info.patient_name && (
                     <div className="flex items-center gap-1.5">
-                      <User size={14} className="text-[#1f655d] shrink-0" />
+                      <User size={14} className="text-seal shrink-0" />
                       <span>{t.patient}: <strong className="font-semibold">{result.patient_info.patient_name}</strong></span>
                     </div>
                   )}
                   {result.patient_info.date && (
                     <div className="flex items-center gap-1.5">
-                      <Calendar size={14} className="text-[#1f655d] shrink-0" />
+                      <Calendar size={14} className="text-seal shrink-0" />
                       <span>{t.date}: {result.patient_info.date}</span>
                     </div>
                   )}
@@ -340,7 +340,7 @@ export default function PrescriptionScanner({ language: propLanguage }) {
             {/* Scheme Suggestion */}
             {result.scheme_suggestion && (
               <div className="bg-blue-50 border border-blue-200 text-blue-950 text-xs p-3.5 rounded-2xl flex items-start gap-2">
-                <Award size={18} className="text-[#e76f46] shrink-0 mt-0.5" />
+                <Award size={18} className="text-seal-bright shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-blue-900 mb-0.5">
                     {t.schemeGuidanceTitle}

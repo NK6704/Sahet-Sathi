@@ -1,6 +1,7 @@
 import React from 'react';
 import { CalendarDays, MapPin, Clock, Phone } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useAppState } from '@/state/store';
 import { useAsync } from '@/lib/useAsync';
 import { listCamps } from '@/services/asha';
 import { AshaShell } from '@/components/asha/AshaShell';
@@ -38,9 +39,10 @@ function formatCampDate(iso, hi) {
 
 function daysAway(iso) {
   if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(iso);
   d.setHours(0, 0, 0, 0);
   return Math.round((d - today) / 86400000);
 }
@@ -51,7 +53,11 @@ function trimTime(t) {
 
 export function AshaCamps() {
   const { profile } = useAuth();
-  const hi = (profile?.language ?? 'Hindi') !== 'English';
+  const { language } = useAppState();
+  /* The portal follows the choice made on the landing page. A saved
+     profile language wins once there is one; before that the device
+     preference is used rather than assuming Hindi. */
+  const hi = (profile?.language || language || 'English') !== 'English';
   const t = (en, dev) => (hi ? dev : en);
 
   const { data, error, loading, reload } = useAsync(() => listCamps({}), []);
@@ -126,11 +132,17 @@ function CampCard({ camp: c, hi }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Eyebrow>
-            {away === 0
+            {/* A camp with no readable date says so rather than
+                counting down from a value that isn't there. */}
+            {away === null
+              ? t('Date not recorded', 'तारीख़ दर्ज नहीं')
+              : away === 0
               ? t('Today', 'आज')
               : away === 1
               ? t('Tomorrow', 'कल')
-              : t(`In ${away} days`, `${away} दिन में`)}
+              : away > 1
+              ? t(`In ${away} days`, `${away} दिन में`)
+              : t(`${Math.abs(away)} days ago`, `${Math.abs(away)} दिन पहले`)}
           </Eyebrow>
           <h3 className="mt-2 text-lg font-semibold leading-snug text-ink">{c.title}</h3>
         </div>
@@ -144,7 +156,8 @@ function CampCard({ camp: c, hi }) {
       <div className="mt-4 space-y-2 text-[0.875rem] text-ink-soft">
         <p className="flex items-center gap-2 font-semibold text-ink">
           <CalendarDays size={14} className="shrink-0 text-ink-faint" aria-hidden="true" />
-          {formatCampDate(c.camp_date, hi)}
+          {formatCampDate(c.camp_date, hi) ||
+            t('No date on the record', 'रिकॉर्ड में तारीख़ नहीं')}
         </p>
 
         {from ? (

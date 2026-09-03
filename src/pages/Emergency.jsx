@@ -790,7 +790,7 @@ export function Emergency() {
               'SOS आपके गाँव की आशा कार्यकर्ता और आपके खाते में सहेजे परिवार के नंबरों तक जाता है, इसलिए इसके लिए खाता ज़रूरी है। ऊपर के दो नंबरों के लिए कुछ भी ज़रूरी नहीं।',
             )}
             action={
-              <Btn as={Link} href="/onboarding" variant="primary">
+              <Btn as={Link} href="/signin" variant="primary">
                 {t('Sign in', 'साइन इन करें')}
               </Btn>
             }

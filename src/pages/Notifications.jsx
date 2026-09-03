@@ -64,10 +64,12 @@ const READ_EVENT = 'sehat:notifications-read';
 const PAGE_SIZE = 20;
 
 /**
- * The category codes /asha/broadcast writes. A code that is not in
- * this table is printed as it was stored rather than dropped — it is
- * the worker's own word for what she sent, and hiding it would lose
- * information the reader could use.
+ * The category codes /asha/broadcast writes, plus `message`, which the
+ * app raises by itself when somebody writes in a conversation.
+ *
+ * A code that is not in this table is printed as it was stored rather
+ * than dropped — it is the worker's own word for what she sent, and
+ * hiding it would lose information the reader could use.
  */
 const CATEGORY_LABELS = {
   health_advice: ['Health advice', 'स्वास्थ्य सलाह'],
@@ -75,6 +77,7 @@ const CATEGORY_LABELS = {
   eligibility: ['Eligibility', 'पात्रता'],
   camp: ['Health camp', 'स्वास्थ्य शिविर'],
   general: ['Notice', 'सूचना'],
+  message: ['New message', 'नया संदेश'],
 };
 
 const SEVERITY = {
@@ -395,7 +398,7 @@ export function Notifications() {
               'सूचनाएँ किसी व्यक्ति को भेजी जाती हैं, किसी उपकरण को नहीं, इसलिए साइन इन करने पर ही आपकी सूचनाएँ दिख सकती हैं।',
             )}
             action={
-              <Btn as={Link} href="/onboarding">
+              <Btn as={Link} href="/signin">
                 {t('Sign in', 'साइन इन')}
               </Btn>
             }
@@ -498,18 +501,35 @@ export function Notifications() {
                     : t('No notices yet', 'अभी कोई सूचना नहीं')
                 }
                 /* The server explains what an empty list means, and it
-                   is never "something failed". Printed verbatim. */
+                   is never "something failed". Printed verbatim.
+
+                   One case the server cannot see: a village broadcast is
+                   addressed by village id, so a household with no village
+                   on its profile is not on any recipient list and never
+                   will be. An empty feed is then the correct result of a
+                   missing field rather than of a quiet worker, and saying
+                   so is the difference between a fixable problem and an
+                   app that looks broken. */
                 body={
-                  feed.data?.note ||
-                  t(
-                    'Notices appear here when the ASHA worker for your village sends one.',
-                    'जब आपके गाँव की आशा कार्यकर्ता कोई सूचना भेजेंगी, वह यहाँ दिखेगी।',
-                  )
+                  !unreadOnly && !myVillage
+                    ? t(
+                        'Your profile does not have a village recorded yet. Notices from an ASHA worker are sent to the households of one village, so nothing can reach you until your village is saved.',
+                        'आपकी प्रोफ़ाइल में अभी गाँव दर्ज नहीं है। आशा कार्यकर्ता की सूचनाएँ किसी एक गाँव के घरों को भेजी जाती हैं, इसलिए गाँव सहेजे जाने तक कोई सूचना आप तक नहीं पहुँच सकती।',
+                      )
+                    : feed.data?.note ||
+                      t(
+                        'Notices appear here when the ASHA worker for your village sends one.',
+                        'जब आपके गाँव की आशा कार्यकर्ता कोई सूचना भेजेंगी, वह यहाँ दिखेगी।',
+                      )
                 }
                 action={
                   unreadOnly ? (
                     <Btn variant="outline" onClick={() => choose(false)}>
                       {t('Show everything', 'सभी दिखाएँ')}
+                    </Btn>
+                  ) : !myVillage ? (
+                    <Btn as={Link} href="/profile" variant="primary">
+                      {t('Add my village', 'मेरा गाँव जोड़ें')}
                     </Btn>
                   ) : (
                     <Btn as={Link} href="/messages" variant="outline">

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Route, Switch, useLocation } from 'wouter';
-import { AppStateProvider } from '@/state/store';
+import { AppStateProvider, useAppState } from '@/state/store';
 import { AuthProvider } from '@/lib/auth';
+import { isHindiLang } from '@/services/i18n';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RequireRole } from '@/components/RequireRole';
 import { Header } from '@/components/Header';
 import { SideNav } from '@/components/SideNav';
@@ -11,6 +13,7 @@ import { FloatingAssistantMic } from '@/components/FloatingAssistantMic';
 // Citizen pages
 import { Landing } from '@/pages/Landing';
 import { Onboarding } from '@/pages/Onboarding';
+import { SignIn } from '@/pages/SignIn';
 import { UserHome } from '@/pages/UserHome';
 import { Assistant } from '@/pages/Assistant';
 import { Schemes } from '@/pages/Schemes';
@@ -50,8 +53,12 @@ import { AdminAshaRequests } from '@/pages/admin/AshaRequests';
  * shell — identity bar, section nav, footer. Stacking the citizen
  * header on top of it would give a worker two navigations and two
  * places to sign out. /admin is bare for the same reason.
+ *
+ * /signin is bare because the citizen header offers Profile, Messages
+ * and Notifications — three links that all lead back to "you need an
+ * account" for exactly the person who is reading this page.
  */
-const BARE_EXACT = ['/', '/onboarding'];
+const BARE_EXACT = ['/', '/onboarding', '/signin'];
 const BARE_PREFIX = ['/asha', '/admin'];
 
 function isBare(location) {
@@ -61,16 +68,28 @@ function isBare(location) {
 
 function AppLayout({ children }) {
   const [location] = useLocation();
+  const { language } = useAppState();
   const bare = isBare(location);
+  const hindi = isHindiLang(language);
 
-  if (bare) return <div className="min-h-screen bg-paper text-ink">{children}</div>;
+  /* Keyed on the location so that navigating away from a screen that
+     threw clears the boundary. Without the key a single bad page would
+     hold the error state for the rest of the session and every later
+     route would render the failure notice instead of itself. */
+  const guarded = (
+    <ErrorBoundary key={location} hindi={hindi}>
+      {children}
+    </ErrorBoundary>
+  );
+
+  if (bare) return <div className="min-h-screen bg-paper text-ink">{guarded}</div>;
 
   return (
     <div className="min-h-screen bg-paper text-ink relative">
       <Header />
       <div className="flex">
         <SideNav />
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">{guarded}</div>
       </div>
       <FloatingAssistantMic />
       <BottomNav />
@@ -114,6 +133,10 @@ export default function App() {
             {/* Public */}
             <Route path="/" component={Landing} />
             <Route path="/onboarding" component={Onboarding} />
+            {/* A household account. Not behind RequireRole, for the obvious
+                reason, and not under /asha — a worker signing in here would
+                get a citizen session with no roster check behind it. */}
+            <Route path="/signin" component={SignIn} />
 
             {/* Citizen app */}
             <Route path="/app" component={UserHome} />

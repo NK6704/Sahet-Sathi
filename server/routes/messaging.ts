@@ -7,6 +7,7 @@ import {
   type Caller,
 } from "../lib/auth";
 import { admin, asUser, audit } from "../lib/supabaseAdmin";
+import { notifyUser, recipientLanguage, wantsHindi } from "../lib/notify";
 
 /* =====================================================================
    Messaging — a citizen and the ASHA worker who covers her village.
@@ -814,7 +815,102 @@ messagingRouter.post(
       throw new HttpError(500, `Could not send your message: ${error.message}`);
     }
 
-    res.status(201).json({ message: shapeMessage(data as Row, caller.id) });
+    const message = shapeMessage(data as Row, caller.id);
+
+    // ---------------------------------------------------------------
+    // Tell the other person something arrived.
+    //
+    // Without this the conversation only works when both people happen
+    // to open the thread. A worker is out walking her village most of the
+    // day and a household has no reason to re-open a screen it has
+    // already read, so a message either side sent sat unseen until
+    // somebody guessed to look. That was the whole of "unable to send
+    // notification or receive the notifications from them": the thread
+    // worked, and nothing announced it.
+    //
+    // Read as the caller, because threads_select already scopes this to
+    // her own threads and the insert above has just proved she is in this
+    // one.
+    const { data: thread, error: threadError } = await asUser(caller.token)
+      .from("message_threads")
+      .select("citizen_id, asha_id")
+      .eq("id", threadId)
+      .maybeSingle();
+
+    let notice: string | null = null;
+
+    if (threadError || !thread) {
+      notice =
+        "Your message is saved, but we could not work out who to notify, so they " +
+        "may not see it until they next open this conversation.";
+    } else {
+      const parties = thread as Row;
+      const citizenId = parties.citizen_id as string;
+      const ashaId = parties.asha_id as string;
+      const recipientId = caller.id === citizenId ? ashaId : citizenId;
+      const senderIsAsha = caller.id === ashaId;
+
+      const language = await recipientLanguage(recipientId);
+      const hi = wantsHindi(language);
+
+      // The sender is named only when she has a name on her profile.
+      // A placeholder in a field a screen renders as a name would be
+      // inventing a person, which is the rule the rest of this file
+      // follows for the same reason.
+      const senderName =
+        caller.fullName && caller.fullName.trim() !== "" ? caller.fullName.trim() : null;
+
+      const title = senderIsAsha
+        ? hi
+          ? senderName
+            ? `${senderName} (आशा कार्यकर्ता) का संदेश`
+            : "आपकी आशा कार्यकर्ता का संदेश"
+          : senderName
+            ? `Message from ${senderName}, your ASHA worker`
+            : "Message from your ASHA worker"
+        : hi
+          ? senderName
+            ? `${senderName} का नया संदेश`
+            : "आपके गाँव से नया संदेश"
+          : senderName
+            ? `New message from ${senderName}`
+            : "New message from a household in your village";
+
+      // No preview of the text, deliberately. See server/lib/notify.ts:
+      // notifications are readable by admins under notif_admin_all and
+      // thread_messages is not, so quoting the message here would widen
+      // who can read what these two wrote to each other.
+      const body = hi
+        ? "संदेश पढ़ने और जवाब देने के लिए बातचीत खोलें। संदेश का मूल पाठ यहाँ नहीं दोहराया गया है, ताकि आपकी बात बातचीत के भीतर ही रहे।"
+        : "Open the conversation to read it and reply. The text is not repeated here, " +
+          "so that what you wrote to each other stays inside the conversation.";
+
+      const result = await notifyUser({
+        authorId: caller.id,
+        targetUserId: recipientId,
+        title,
+        body,
+        category: "message",
+        // A message is not an emergency. Somebody who needs help now is
+        // meant to use SOS or ring the number on the contact card, and
+        // marking every message urgent would leave no word for the one
+        // that is.
+        severity: "low",
+        language: hi ? "Hindi" : "English",
+        source: "Sehat Sathi conversation",
+      });
+
+      if (!result.delivered && result.warning) {
+        // The message itself is saved, so this stays a 201. What failed is
+        // the nudge, and saying so is more use than either hiding it or
+        // failing a send that worked.
+        notice =
+          "Your message is saved, but we could not put a notification in their feed, " +
+          "so they may not see it until they next open this conversation.";
+      }
+    }
+
+    res.status(201).json(notice ? { message, notice } : { message });
   }),
 );
 
@@ -885,3 +981,268 @@ messagingRouter.get(
     });
   }),
 );
+
+// =====================================================================
+// GET /asha/households — the households a worker may write to first
+// =====================================================================
+//
+// This endpoint exists because of a dead end. A worker who opened the
+// citizen contact card for her own village was told to "open a thread
+// with a household from the ASHA portal instead", and the portal had no
+// way to do it: the only thread-creating route keyed the caller as the
+// citizen, and RLS deliberately hides other people's profiles from her.
+//
+// The service role is used here, and this is the reason it has to be.
+// `profiles_select_own` in 02_rls.sql lets a worker read a citizen she
+// already holds an alert or referral for and nobody else — which is
+// correct, and which also means the very first message can never be hers
+// to send. The list is therefore built server-side and narrowed to
+// exactly what `asha_covers_citizen()` would allow: residents of the
+// villages in her own `asha_villages` rows, herself excluded. Her token
+// still decides which villages those are, so this cannot be widened by
+// passing a village she does not cover.
+//
+// Three columns and no more: id, name, village. Not a phone number — the
+// point of this screen is to write, and a directory of every villager's
+// mobile is not a thing a portal should hand out on page load.
+
+messagingRouter.get(
+  "/asha/households",
+  requireAsha,
+  handler(async (req: Request, res: Response) => {
+    const caller = callerOf(req);
+
+    // Read as herself. asha_villages_select scopes this to
+    // asha_user_id = auth.uid(), so the village list is hers by
+    // construction rather than by a filter written here.
+    const { data: links, error: linkError } = await asUser(caller.token)
+      .from("asha_villages")
+      .select("village_id")
+      .eq("asha_user_id", caller.id);
+
+    if (linkError) {
+      throw new HttpError(500, `Could not read your villages: ${linkError.message}`);
+    }
+
+    const villageIds = ((links ?? []) as Row[])
+      .map((row) => row.village_id as string)
+      .filter(Boolean);
+
+    if (villageIds.length === 0) {
+      res.json({
+        households: [],
+        villages: [],
+        note:
+          "No village is mapped to your account in asha_villages, so there is " +
+          "no household you are authorised to write to yet. Ask your block " +
+          "office or an admin to assign your villages.",
+      });
+      return;
+    }
+
+    const db = admin();
+
+    const { data: villageRows, error: villageError } = await db
+      .from("villages")
+      .select(VILLAGE_COLUMNS)
+      .in("id", villageIds);
+
+    if (villageError) {
+      throw new HttpError(500, `Could not read your villages: ${villageError.message}`);
+    }
+
+    const villages = ((villageRows ?? []) as Row[]).map((row) => shapeVillage(row));
+    const villageById = new Map(
+      ((villageRows ?? []) as Row[]).map((row) => [row.id as string, row]),
+    );
+
+    const { data: people, error: peopleError } = await db
+      .from("profiles")
+      .select("id, full_name, village_id, role, created_at")
+      .in("village_id", villageIds)
+      // Herself excluded: message_threads carries check (citizen_id <> asha_id),
+      // and a worker is a resident of her own village like anybody else.
+      .neq("id", caller.id)
+      .order("full_name", { ascending: true, nullsFirst: false })
+      .limit(500);
+
+    if (peopleError) {
+      throw new HttpError(500, `Could not read the households in your villages: ${peopleError.message}`);
+    }
+
+    // Staff are filtered out here rather than in the query so that a second
+    // worker covering the same village does not appear as a household. She
+    // is a colleague, and a thread with her would not be a household record.
+    const households = ((people ?? []) as Row[])
+      .filter((row) => (row.role ?? "citizen") === "citizen")
+      .map((row) => ({
+        userId: row.id,
+        // The name as stored. An account that has not filled one in shows as
+        // null and the screen is expected to say "name not recorded" rather
+        // than invent one.
+        fullName: row.full_name ?? null,
+        villageId: row.village_id ?? null,
+        village: shapeVillage(villageById.get(row.village_id as string) ?? null),
+        registeredAt: row.created_at ?? null,
+      }));
+
+    res.json({
+      households,
+      villages,
+      source:
+        "Read from the households registered on Sehat Sathi in the villages " +
+        "assigned to you. It is not a census: a family that has not made an " +
+        "account here will not appear.",
+      ...(households.length === 0
+        ? {
+            note:
+              "No household in your villages has registered on Sehat Sathi yet, " +
+              "so there is nobody to write to. A village broadcast would reach " +
+              "nobody either.",
+          }
+        : {}),
+    });
+  }),
+);
+
+// =====================================================================
+// POST /asha/messages/threads — the worker opens the conversation
+// =====================================================================
+
+messagingRouter.post(
+  "/asha/messages/threads",
+  requireAsha,
+  handler(async (req: Request, res: Response) => {
+    const caller = callerOf(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const client = asUser(caller.token);
+
+    const citizenId = uuid(body.citizenId, "citizenId");
+
+    if (citizenId === caller.id) {
+      throw new HttpError(
+        400,
+        "That is your own account. A conversation needs two different people.",
+      );
+    }
+
+    // Find first, so pressing the button twice does not make two threads.
+    // unique (citizen_id, asha_id) means there is at most one to find.
+    const { data: existing, error: findError } = await client
+      .from("message_threads")
+      .select(THREAD_COLUMNS)
+      .eq("citizen_id", citizenId)
+      .eq("asha_id", caller.id)
+      .maybeSingle();
+
+    if (findError) {
+      throw new HttpError(500, `Could not check for an existing conversation: ${findError.message}`);
+    }
+    if (existing) {
+      res.json({ thread: shapeThread(existing as Row, caller.id), created: false });
+      return;
+    }
+
+    // The household's village, not the worker's. A worker may cover
+    // several, and stamping the thread with the wrong one would file the
+    // conversation under a village the household does not live in.
+    const { data: citizenRow, error: citizenError } = await admin()
+      .from("profiles")
+      .select("village_id")
+      .eq("id", citizenId)
+      .maybeSingle();
+
+    if (citizenError) {
+      throw new HttpError(500, `Could not read that household's village: ${citizenError.message}`);
+    }
+    if (!citizenRow) {
+      throw new HttpError(404, "There is no account with that id.");
+    }
+
+    // Inserted as the worker, so threads_insert in 06_platform_rls.sql is
+    // what authorises this: it requires is_asha() and
+    // asha_covers_citizen(auth.uid(), citizen_id). A household outside her
+    // assigned villages is refused by the database, not by a check here
+    // that could be forgotten.
+    const { data: created, error: insertError } = await client
+      .from("message_threads")
+      .insert({
+        citizen_id: citizenId,
+        asha_id: caller.id,
+        village_id: (citizenRow as Row).village_id ?? null,
+        subject: str(body.subject),
+      })
+      .select(THREAD_COLUMNS)
+      .single();
+
+    if (insertError) {
+      if (insertError.code === "23505") {
+        const { data: raced } = await client
+          .from("message_threads")
+          .select(THREAD_COLUMNS)
+          .eq("citizen_id", citizenId)
+          .eq("asha_id", caller.id)
+          .maybeSingle();
+        if (raced) {
+          res.json({ thread: shapeThread(raced as Row, caller.id), created: false });
+          return;
+        }
+      }
+      if (insertError.code === "42501") {
+        throw new HttpError(
+          403,
+          "The database refused this. A conversation can only be opened with a " +
+            "household living in one of the villages assigned to you. If this " +
+            "family has just moved in, their village has to be recorded on their " +
+            "profile first.",
+        );
+      }
+      if (insertError.code === "23514") {
+        throw new HttpError(
+          400,
+          "A conversation needs two different people. Nothing was created.",
+        );
+      }
+      throw new HttpError(500, `Could not open the conversation: ${insertError.message}`);
+    }
+
+    // She has opened it; she has not said anything yet. The household is
+    // told that a conversation exists, in their own language, and no
+    // quoted content goes into the notification body — a notification row
+    // is readable by an admin and a thread message is not.
+    const hi = wantsHindi(await recipientLanguage(citizenId));
+    const notice = await notifyUser({
+      authorId: caller.id,
+      targetUserId: citizenId,
+      title: hi ? "आपकी आशा कार्यकर्ता ने बातचीत शुरू की है" : "Your ASHA worker has started a conversation",
+      body: hi
+        ? "आपके गाँव की आशा कार्यकर्ता ने आपसे बातचीत शुरू की है। संदेश देखने और जवाब देने के लिए संदेश अनुभाग खोलें।"
+        : "The ASHA worker for your village has opened a conversation with you. Open Messages to read it and reply.",
+      category: "message",
+      severity: "low",
+      language: hi ? "Hindi" : "English",
+      source: "Sehat Sathi conversation",
+    });
+
+    await audit({
+      actorId: caller.id,
+      actorRole: caller.role,
+      action: "message_thread.opened",
+      entity: "message_threads",
+      entityId: (created as Row).id,
+      subjectId: citizenId,
+      detail: { village_id: (citizenRow as Row).village_id ?? null, opened_by: "asha" },
+      ip: req.ip ?? null,
+    });
+
+    res.status(201).json({
+      thread: shapeThread(created as Row, caller.id),
+      created: true,
+      // Reported rather than hidden: the thread exists either way, and she
+      // should know whether the household was actually told about it.
+      householdNotified: notice.delivered,
+      ...(notice.warning ? { warning: notice.warning } : {}),
+    });
+  }),
+);
+

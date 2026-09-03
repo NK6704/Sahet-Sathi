@@ -1,28 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'wouter';
-import {
-  Save,
-  ShieldCheck,
-  Phone,
-  MessageSquare,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-} from 'lucide-react';
+import { Save, ShieldCheck, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { useAppState } from '@/state/store';
 import { useAuth } from '@/lib/auth';
 import { getT } from '@/services/i18n';
 import { useAsync } from '@/lib/useAsync';
 import { getAshaContact } from '@/services/platform';
 import { ConsentDialog } from '@/components/common/ConsentDialog';
+import { AshaContactCard } from '@/components/asha/AshaContactCard';
 import {
   Btn,
   Card,
   Eyebrow,
-  EmptyState,
   ErrorState,
   LoadingState,
-  Pill,
   SectionHead,
 } from '@/components/ds';
 
@@ -89,6 +80,7 @@ const BLANK_FORM = {
   state: '',
   district: '',
   village: '',
+  block: '',
   ration_card_type: '',
   family_members: '',
   is_pregnant_or_lactating: false,
@@ -107,6 +99,7 @@ function formFrom(profile) {
     state: text(profile?.state),
     district: text(profile?.district),
     village: text(profile?.village),
+    block: text(profile?.block),
     ration_card_type: text(profile?.ration_card_type),
     family_members: text(profile?.family_members),
     is_pregnant_or_lactating: profile?.is_pregnant_or_lactating === true,
@@ -148,16 +141,55 @@ function isBlankProfile(profile) {
 }
 
 /**
- * The village on the ASHA contact response.
+ * The village-match outcome, in words.
  *
- * /api/asha/contact returns it as a row — {id, name, block, district,
- * state} — so it is read as an object first and tolerated as a plain
- * string, which is what an older shape of this endpoint returned.
+ * `ambiguous` is the one that earns its place. Two villages of the same
+ * name in one district is common in India, and picking one would attach a
+ * household to an ASHA worker who has no duty of care for it — a wrong
+ * answer that looks exactly like a right one. So nothing is linked and the
+ * screen asks for the block instead.
  */
-function villageLabel(village) {
-  if (!village) return '';
-  if (typeof village === 'string') return village;
-  return [village.name, village.block, village.district].filter(Boolean).join(', ');
+function villageNoteText(match, name, district, t) {
+  if (!match) return null;
+
+  const count = match.candidateCount || 2;
+  const named = name || null;
+  const where = district || null;
+
+  switch (match.kind) {
+    case 'ambiguous':
+      return t(
+        `More than one village in ${where || 'your district'} is called ${named || 'that'} — ` +
+          `${count} of them. You have not been linked to any, because the wrong one would put ` +
+          `you in touch with a worker who does not cover your household. Fill in your block ` +
+          `above and save again.`,
+        `${where || 'आपके ज़िले'} में ${named || 'इस'} नाम के ${count} गाँव हैं। किसी से भी ` +
+          `नहीं जोड़ा गया, क्योंकि गलत गाँव जुड़ने पर आपको ऐसी कार्यकर्ता मिलेंगी जो आपके घर ` +
+          `की ज़िम्मेदार नहीं हैं। ऊपर अपना ब्लॉक भरें और फिर सहेजें।`,
+      );
+    case 'created':
+      return t(
+        `${named || 'Your village'} was not on the map in this app yet, so it has been added. ` +
+          `No ASHA worker is registered for it at the moment; when one registers, she will ` +
+          `appear below.`,
+        `${named || 'आपका गाँव'} अभी इस ऐप में दर्ज नहीं था, इसलिए जोड़ दिया गया है। फ़िलहाल ` +
+          `इसके लिए कोई आशा कार्यकर्ता पंजीकृत नहीं है; जब होंगी, तो नीचे दिखेंगी।`,
+      );
+    case 'blank':
+      return t(
+        'No village saved yet, so we cannot tell you who your ASHA worker is. That one field is what decides it.',
+        'अभी कोई गाँव सहेजा नहीं गया है, इसलिए हम नहीं बता सकते कि आपकी आशा कार्यकर्ता कौन हैं। यही एक खाना इसे तय करता है।',
+      );
+    case 'exact':
+    case 'relaxed':
+    case 'unchanged':
+      // Matched, or nothing about the village changed. Silence is right:
+      // a confirmation nobody asked for is noise, and the worker's card
+      // further down the page is the confirmation that matters.
+      return null;
+    default:
+      return match.note || null;
+  }
 }
 
 /** A labelled text field. `.field` carries the 3.25rem tap height. */
@@ -168,186 +200,6 @@ function Field({ label, hint, children }) {
       {children}
       {hint ? <span className="mt-1.5 block text-[0.8rem] text-ink-faint">{hint}</span> : null}
     </label>
-  );
-}
-
-/* -------------------------------------------------------------
-   02 · Your ASHA worker
-
-   The one thing on this page that comes from the server rather
-   than from the person. Her name and number are printed only if
-   the registry holds a worker mapped to their village; when it
-   does not, the server's own sentence says so and no neighbouring
-   village's worker is substituted.
-   ------------------------------------------------------------- */
-function AshaContact({ contact, loading, error, onRetry, signedIn, t }) {
-  if (!signedIn) {
-    return (
-      <EmptyState
-        stamp={false}
-        title={t('Sign in to see who covers your village', 'अपने गाँव की कार्यकर्ता देखने के लिए साइन इन करें')}
-        body={t(
-          'Which ASHA worker is yours depends on the village on your record, so we have to know whose record this is.',
-          'कौन-सी आशा कार्यकर्ता आपकी है, यह आपके रिकॉर्ड में दर्ज गाँव से तय होता है — इसलिए पहले पहचान ज़रूरी है।',
-        )}
-      />
-    );
-  }
-
-  if (loading) {
-    return (
-      <LoadingState
-        label={t('Looking up your ASHA worker', 'आपकी आशा कार्यकर्ता खोज रहे हैं')}
-        rows={1}
-      />
-    );
-  }
-
-  if (error) {
-    return (
-      <ErrorState
-        title={t('We could not look her up', 'जानकारी नहीं मिल सकी')}
-        body={
-          error.message ||
-          t(
-            'The server could not be reached. That is a connection problem — it does not mean no worker covers your village.',
-            'सर्वर तक नहीं पहुँच सके। यह कनेक्शन की समस्या है — इसका मतलब यह नहीं कि आपके गाँव में कोई कार्यकर्ता नहीं है।',
-          )
-        }
-        onRetry={onRetry}
-        retryLabel={t('Try again', 'फिर कोशिश करें')}
-      />
-    );
-  }
-
-  const asha = contact?.asha ?? null;
-
-  /* Nobody mapped. The server said why in one sentence and that
-     sentence is the whole content of this state — inventing a name
-     or a number here is the most harmful thing this page could do. */
-  if (!asha) {
-    const helpline = contact?.helpline ?? null;
-
-    return (
-      <div className="space-y-4">
-        <Card className="p-5">
-          <Eyebrow>{t('No worker linked yet', 'अभी कोई कार्यकर्ता दर्ज नहीं')}</Eyebrow>
-          <p className="mt-3 text-[0.9rem] leading-relaxed text-ink-soft">
-            {contact?.note ||
-              t(
-                'No ASHA worker is linked to your village in this app yet, so there is no name or number to show you.',
-                'इस ऐप में अभी आपके गाँव के लिए कोई आशा कार्यकर्ता दर्ज नहीं है, इसलिए दिखाने के लिए कोई नाम या नंबर नहीं है।',
-              )}
-          </p>
-        </Card>
-
-        {helpline?.number ? (
-          <Card tone="seal" className="p-5">
-            <Eyebrow>{t('In the meantime', 'तब तक')}</Eyebrow>
-            <h3 className="display-md mt-2.5 text-xl">
-              {helpline.label || t('Government health helpline', 'सरकारी स्वास्थ्य हेल्पलाइन')}
-            </h3>
-            <p className="figure mt-3 text-4xl text-seal">{helpline.number}</p>
-            <div className="mt-5">
-              <Btn as="a" href={`tel:${helpline.number}`}>
-                <Phone size={17} aria-hidden="true" />
-                {t('Call the helpline', 'हेल्पलाइन पर कॉल करें')}
-              </Btn>
-            </div>
-          </Card>
-        ) : null}
-      </div>
-    );
-  }
-
-  const alsoCovering = contact?.alsoCovering ?? [];
-  const village = villageLabel(contact?.village);
-
-  return (
-    <div className="space-y-4">
-      <Card tone="asha" className="p-5 sm:p-7">
-        <div className="flex flex-wrap items-center gap-3">
-          <Eyebrow>{t('Your ASHA worker', 'आपकी आशा कार्यकर्ता')}</Eyebrow>
-          {asha.isPrimary ? (
-            <Pill tone="asha">{t('Primary for your village', 'आपके गाँव की मुख्य कार्यकर्ता')}</Pill>
-          ) : null}
-        </div>
-
-        <h3 className="display-md mt-3 text-2xl">{asha.fullName}</h3>
-
-        <div className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-          {village ? (
-            <div>
-              <Eyebrow>{t('Village', 'गाँव')}</Eyebrow>
-              <p className="mt-1.5 text-[0.95rem] text-ink">{village}</p>
-            </div>
-          ) : null}
-          {asha.subCentre ? (
-            <div>
-              <Eyebrow>{t('Sub-centre', 'उपकेंद्र')}</Eyebrow>
-              <p className="mt-1.5 text-[0.95rem] text-ink">{asha.subCentre}</p>
-            </div>
-          ) : null}
-          {asha.ashaCode ? (
-            <div>
-              <Eyebrow>{t('ASHA code', 'आशा कोड')}</Eyebrow>
-              <p className="mt-1.5 font-mono text-[0.95rem] text-ink">{asha.ashaCode}</p>
-            </div>
-          ) : null}
-          {asha.phone ? (
-            <div>
-              <Eyebrow>{t('Phone', 'फ़ोन')}</Eyebrow>
-              <p className="figure mt-1.5 text-2xl text-ink">{asha.phone}</p>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          {/* A call is the fastest thing available to somebody standing
-              in a courtyard with a sick child, so the number is printed
-              in full and the call is the primary action. */}
-          {asha.phone ? (
-            <Btn as="a" href={`tel:${asha.phone}`} variant="asha" size="lg">
-              <Phone size={18} aria-hidden="true" />
-              {t('Call her now', 'अभी कॉल करें')}
-            </Btn>
-          ) : null}
-          <Btn as={Link} href="/messages" variant="outline" size="lg">
-            <MessageSquare size={18} aria-hidden="true" />
-            {t('Write to her instead', 'लिखकर भेजें')}
-          </Btn>
-        </div>
-      </Card>
-
-      {alsoCovering.length ? (
-        <Card className="p-5">
-          <Eyebrow>{t('Also covering your village', 'आपके गाँव में और भी')}</Eyebrow>
-          <ul className="mt-3 space-y-2.5">
-            {alsoCovering.map((worker) => (
-              <li
-                key={worker.userId || worker.ashaCode || worker.fullName}
-                className="flex flex-wrap items-center justify-between gap-3"
-              >
-                <span className="text-[0.95rem] text-ink">{worker.fullName}</span>
-                {worker.phone ? (
-                  <Btn as="a" href={`tel:${worker.phone}`} variant="outline">
-                    <Phone size={15} aria-hidden="true" />
-                    {worker.phone}
-                  </Btn>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {contact?.source ? (
-        <p className="font-mono text-[0.68rem] uppercase leading-relaxed tracking-[0.08em] text-ink-faint">
-          {t('Source: ', 'स्रोत: ')}
-          {contact.source}
-        </p>
-      ) : null}
-    </div>
   );
 }
 
@@ -363,7 +215,6 @@ export function Profile() {
   const [saving, setSaving] = useState(false);
   // null until a save has been attempted, then {ok} or {ok:false, error}.
   const [saveOutcome, setSaveOutcome] = useState(null);
-  const [showDebug, setShowDebug] = useState(false);
 
   /* null means "not seeded yet". The form is seeded once, when the
      profile request settles, and never again: re-seeding on every
@@ -377,6 +228,19 @@ export function Profile() {
   }, [profileLoading, userProfile]);
 
   const set = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  /* What the server says happened when it tried to match the typed village
+     against public.villages. The server sends the fact — the kind of match
+     and how many candidates it saw — and the sentence is composed here, so
+     a Hindi screen gets Hindi rather than the server's English. An
+     unrecognised kind falls back to the server's own note rather than being
+     swallowed. */
+  const villageNote = villageNoteText(
+    userProfile?.villageMatch ?? null,
+    form?.village?.trim() || userProfile?.village || null,
+    form?.district?.trim() || userProfile?.district || null,
+    t,
+  );
 
   const blank = isBlankProfile(userProfile);
 
@@ -399,10 +263,16 @@ export function Profile() {
       state: form.state.trim(),
       district: form.district.trim(),
       village: form.village.trim(),
+      block: form.block.trim(),
       ration_card_type: form.ration_card_type,
       family_members: numberOrNull(form.family_members),
       is_pregnant_or_lactating: form.is_pregnant_or_lactating,
       chronic_conditions: listFrom(form.chronic_conditions),
+      // The language chosen on the landing page, written to the profile so
+      // that a notification an ASHA worker triggers is composed in the
+      // script this household can read. Nothing reads it back into the UI —
+      // the landing choice stays authoritative there.
+      language,
     });
 
     setSaving(false);
@@ -466,6 +336,26 @@ export function Profile() {
           />
         ) : (
           <>
+            {/* Nothing below this point can be saved by somebody who is not
+                signed in, and the reason is not arbitrary: an ASHA worker is
+                reached through profiles.village_id, and a profile row exists
+                only for a real account. So the prompt names what is lost
+                rather than simply demanding a login. */}
+            {!isAuthenticated ? (
+              <Card tone="amber" className="mt-6 p-5">
+                <Eyebrow>{t('Not signed in', 'साइन इन नहीं हैं')}</Eyebrow>
+                <p className="mt-3 text-[0.9rem] leading-relaxed text-ink-soft">
+                  {t(
+                    'You can read and use the app without an account, but nothing here can be saved and no ASHA worker can be linked to you. Your village is what connects you to her, and it has to be stored against an account before she can see it.',
+                    'खाता बनाए बिना भी ऐप पढ़ और इस्तेमाल कर सकते हैं, पर यहाँ कुछ सहेजा नहीं जाएगा और कोई आशा कार्यकर्ता आपसे नहीं जुड़ पाएगी। आपका गाँव ही आपको उनसे जोड़ता है, और वह किसी खाते के साथ सहेजा जाना ज़रूरी है।',
+                  )}
+                </p>
+                <Btn as={Link} href="/signin" variant="primary" className="mt-4">
+                  {t('Sign in or create an account', 'साइन इन करें या खाता बनाएँ')}
+                </Btn>
+              </Card>
+            ) : null}
+
             {blank ? (
               <Card tone="seal" className="mt-6 p-5">
                 <Eyebrow>{t('Nothing filled in yet', 'अभी कुछ भरा नहीं है')}</Eyebrow>
@@ -549,7 +439,7 @@ export function Profile() {
                 </Field>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label={t('State', 'राज्य')}>
                   <input
                     type="text"
@@ -559,7 +449,13 @@ export function Profile() {
                   />
                 </Field>
 
-                <Field label={t('District', 'ज़िला')}>
+                <Field
+                  label={t('District', 'ज़िला')}
+                  hint={t(
+                    'Needed before your village can be matched — there is a Rampur in most districts of India.',
+                    'गाँव मिलाने के लिए ज़िला ज़रूरी है — रामपुर नाम का गाँव लगभग हर ज़िले में है।',
+                  )}
+                >
                   <input
                     type="text"
                     value={form.district}
@@ -567,7 +463,9 @@ export function Profile() {
                     className="field mt-2"
                   />
                 </Field>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label={t('Village or town', 'गाँव या कस्बा')}
                   hint={t(
@@ -582,7 +480,35 @@ export function Profile() {
                     className="field mt-2"
                   />
                 </Field>
+
+                <Field
+                  label={t('Block or tehsil (optional)', 'ब्लॉक या तहसील (ज़रूरी नहीं)')}
+                  hint={t(
+                    'Only needed if another village in your district has the same name. Leave it blank otherwise.',
+                    'सिर्फ़ तब भरें जब आपके ज़िले में इसी नाम का दूसरा गाँव भी हो। वरना खाली छोड़ दें।',
+                  )}
+                >
+                  <input
+                    type="text"
+                    value={form.block}
+                    onChange={(e) => set('block')(e.target.value)}
+                    className="field mt-2"
+                  />
+                </Field>
               </div>
+
+              {/* The server says how it matched the village, and this prints
+                  it whenever there is something to say. The case that
+                  matters is `ambiguous`: two villages of that name in the
+                  district, so nothing was linked and the honest response is
+                  a question rather than a guess that would attach this
+                  household to a stranger's worker. */}
+              {villageNote ? (
+                <Card tone="amber" className="p-5">
+                  <Eyebrow>{t('Your village', 'आपका गाँव')}</Eyebrow>
+                  <p className="mt-3 text-[0.9rem] leading-relaxed text-ink-soft">{villageNote}</p>
+                </Card>
+              ) : null}
 
               <Field
                 label={t('Ration card your household holds', 'आपके घर का राशन कार्ड')}
@@ -707,24 +633,14 @@ export function Profile() {
           )}
         />
         <div className="mt-6">
-          <AshaContact
+          <AshaContactCard
             contact={contact.data}
             loading={contact.loading}
             error={contact.error}
             onRetry={contact.reload}
             signedIn={isAuthenticated}
-            t={t}
+            language={language}
           />
-          <div className="mt-4">
-            <Btn variant="outline" onClick={() => setShowDebug((s) => !s)}>
-              {showDebug ? 'Hide debug' : 'Show debug'}
-            </Btn>
-            {showDebug ? (
-              <Card className="mt-3 p-4">
-                <pre className="text-xs max-h-48 overflow-auto">{JSON.stringify({ userProfile, contact: { data: contact.data, loading: contact.loading, error: contact.error } }, null, 2)}</pre>
-              </Card>
-            ) : null}
-          </div>
         </div>
       </section>
 

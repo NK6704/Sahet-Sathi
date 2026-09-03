@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'wouter';
 import { ArrowLeft, Phone, Hospital, Check } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useAppState } from '@/state/store';
 import { useAsync } from '@/lib/useAsync';
 import {
   getReferral,
   updateReferral,
-  REFERRAL_STATUSES,
   statusMeta,
   severityMeta,
 } from '@/services/asha';
@@ -35,7 +35,11 @@ import {
 
 export function AshaReferralDetail({ params }) {
   const { profile } = useAuth();
-  const hi = (profile?.language ?? 'Hindi') !== 'English';
+  const { language } = useAppState();
+  /* The portal follows the choice made on the landing page. A saved
+     profile language wins once there is one; before that the device
+     preference is used rather than assuming Hindi. */
+  const hi = (profile?.language || language || 'English') !== 'English';
   const t = (en, dev) => (hi ? dev : en);
 
   const id = params?.id;
@@ -104,6 +108,13 @@ export function AshaReferralDetail({ params }) {
       ) : error ? (
         <ErrorState
           title={t("Couldn't load this referral", 'रेफरल लोड नहीं हुआ')}
+          body={
+            error.message ||
+            t(
+              'The record could not be read. Nothing has been changed — try again.',
+              'रिकॉर्ड नहीं पढ़ा जा सका। कुछ भी बदला नहीं गया — फिर कोशिश करें।',
+            )
+          }
           onRetry={reload}
           retryLabel={t('Try again', 'फिर कोशिश करें')}
         />
@@ -206,6 +217,7 @@ export function AshaReferralDetail({ params }) {
                     onChange={(e) => setNote(e.target.value)}
                     rows={2}
                     className="field mt-2 w-full resize-y py-3"
+                    aria-label={t('Note about this update', 'इस बदलाव के बारे में नोट')}
                   />
                 </label>
 
@@ -223,6 +235,7 @@ export function AshaReferralDetail({ params }) {
                         'Seen at the PHC. Iron tablets given, review in one month.',
                         'PHC पर देखा गया। आयरन की गोलियाँ दी गईं, एक महीने में जाँच।',
                       )}
+                      aria-label={t('What happened in the end', 'अंत में क्या हुआ')}
                     />
                   </label>
                 ) : null}
@@ -235,7 +248,7 @@ export function AshaReferralDetail({ params }) {
 
                 <div className="mt-6 flex flex-wrap gap-3 border-t border-rule pt-6">
                   {nextStates.map((s) => {
-                    const m = REFERRAL_STATUSES.find((x) => x.value === s);
+                    const m = statusMeta(s);
                     return (
                       <Btn
                         key={s}
@@ -282,7 +295,7 @@ export function AshaReferralDetail({ params }) {
                 <Eyebrow>{t('Reach them', 'संपर्क करें')}</Eyebrow>
                 <Btn
                   as="a"
-                  href={`tel:${ref.patient_phone.replace(/[^\d+]/g, '')}`}
+                  href={`tel:${String(ref.patient_phone).replace(/[^\d+]/g, '')}`}
                   variant="primary"
                   className="mt-4 w-full"
                 >
@@ -299,8 +312,14 @@ export function AshaReferralDetail({ params }) {
                   <Hospital size={16} className="mt-0.5 shrink-0 text-seal" aria-hidden="true" />
                   {ref.facility_name}
                 </p>
+                <p className="mt-2 text-[0.8rem] leading-relaxed text-ink-faint">
+                  {t(
+                    'Only the name was recorded with this referral. Search the registry for its address and phone number.',
+                    'इस रेफरल के साथ केवल नाम दर्ज हुआ था। पता और फ़ोन नंबर के लिए रजिस्टर में खोजें।',
+                  )}
+                </p>
                 <Btn as={Link} href="/asha/healthcare" variant="outline" className="mt-4 w-full">
-                  {t('Facility details', 'सुविधा का विवरण')}
+                  {t('Search the registry', 'रजिस्टर में खोजें')}
                 </Btn>
               </Card>
             ) : null}

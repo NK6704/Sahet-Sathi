@@ -8,15 +8,19 @@ import {
   Loader2,
   Radio,
   RotateCw,
+  Search,
   Send,
+  UserPlus,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { getT } from '@/services/i18n';
 import { useAsync } from '@/lib/useAsync';
 import {
+  getAshaHouseholds,
   getAshaThreadSummary,
   getMessageThreads,
   getThreadMessages,
+  openAshaThread,
   sendThreadMessage,
 } from '@/services/platform';
 import { AshaShell } from '@/components/asha/AshaShell';
@@ -418,6 +422,177 @@ function Inbox({ threads, note, t, deva }) {
   );
 }
 
+/* -------------------------------------------------------------
+   Writing first.
+
+   This panel exists because of a dead end a worker actually hit.
+   Opening the citizen contact card for her own village resolved the
+   "your ASHA worker" lookup to herself, and the message button then
+   failed with "you are the ASHA worker covering your own village…
+   open a thread with a household from the ASHA portal instead" —
+   advice pointing at something the portal could not do.
+
+   She cannot pick a household out of the database herself: RLS hides
+   a citizen's profile from her until an alert, a referral or a thread
+   already links them, which is the correct default and also means the
+   first message could never be hers. The server narrows the list to
+   the villages assigned to her and returns names only.
+
+   The list is households registered on Sehat Sathi, not her register.
+   The server says so in `source` and that sentence is printed, because
+   a worker who mistook this for her household list would conclude that
+   families who simply have no account do not exist.
+   ------------------------------------------------------------- */
+
+function villageLabel(village) {
+  if (!village) return '';
+  if (typeof village === 'string') return village.trim();
+  return [village.name, village.block, village.district].filter(Boolean).join(', ');
+}
+
+function StartPanel({ t, deva, onOpened }) {
+  const [, navigate] = useLocation();
+  const households = useAsync(() => getAshaHouseholds(), []);
+  const [query, setQuery] = useState('');
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  const all = households.data?.households ?? [];
+  const needle = query.trim().toLowerCase();
+  const rows = needle
+    ? all.filter((h) =>
+        [h.fullName, villageLabel(h.village)]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(needle),
+      )
+    : all;
+
+  async function write(household) {
+    setError(null);
+    setBusyId(household.userId);
+    try {
+      const result = await openAshaThread({ citizenId: household.userId });
+      if (onOpened) onOpened();
+      navigate(`/asha/messages/${result.thread.id}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (households.loading) {
+    return <LoadingState label={t('Loading households', 'परिवार लोड हो रहे हैं')} rows={3} />;
+  }
+
+  if (households.error) {
+    return (
+      <ErrorState
+        title={t('The household list did not load', 'परिवारों की सूची लोड नहीं हुई')}
+        body={households.error.message}
+        onRetry={households.reload}
+        retryLabel={t('Try again', 'फिर कोशिश करें')}
+      />
+    );
+  }
+
+  if (all.length === 0) {
+    return (
+      <EmptyState
+        title={t('Nobody to write to yet', 'अभी किसी को लिखने के लिए नहीं')}
+        /* The server's own sentence, which distinguishes "no village is
+           assigned to you" from "your villages have no registered
+           households". Those need different people to fix them. */
+        body={
+          households.data?.note ||
+          t(
+            'No household in your villages has registered on Sehat Sathi yet.',
+            'आपके गाँवों में अभी किसी परिवार ने सेहत साथी पर पंजीकरण नहीं किया है।',
+          )
+        }
+        action={
+          <Btn as={Link} href="/asha/broadcast" variant="outline">
+            <Radio size={17} aria-hidden="true" />
+            {t('Send a notice instead', 'बदले में सूचना भेजें')}
+          </Btn>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {all.length > 8 ? (
+        <label className="block">
+          <span className="sr-only">{t('Search households', 'परिवार खोजें')}</span>
+          <div className="flex items-center gap-2.5">
+            <Search size={17} className="shrink-0 text-ink-faint" aria-hidden="true" />
+            <input
+              type="search"
+              className="field"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t('Search by name or village', 'नाम या गाँव से खोजें')}
+            />
+          </div>
+        </label>
+      ) : null}
+
+      {error ? <ServerNote tone="siren" icon={AlertTriangle}>{error}</ServerNote> : null}
+
+      <ul className="divide-y divide-rule rounded-lg border border-rule bg-paper-2">
+        {rows.map((household) => {
+          const village = villageLabel(household.village);
+          const busy = busyId === household.userId;
+          return (
+            <li
+              key={household.userId}
+              className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 p-4 sm:px-5"
+            >
+              <div className="min-w-0">
+                <p className="text-[0.98rem] leading-snug font-semibold text-ink">
+                  {household.fullName || (
+                    /* Not "Unknown" and not a placeholder name. The account
+                       exists; the name field is empty. */
+                    <span className="font-normal text-ink-faint">
+                      {t('Name not recorded', 'नाम दर्ज नहीं')}
+                    </span>
+                  )}
+                </p>
+                {village ? (
+                  <p className="mt-1 text-[0.85rem] text-ink-soft">{village}</p>
+                ) : null}
+              </div>
+              <Btn variant="asha" onClick={() => write(household)} disabled={busy}>
+                {busy ? (
+                  <Loader2 size={17} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <UserPlus size={17} aria-hidden="true" />
+                )}
+                {t('Write to them', 'इन्हें लिखें')}
+              </Btn>
+            </li>
+          );
+        })}
+      </ul>
+
+      {rows.length === 0 ? (
+        <ServerNote>
+          {t('No household matches that search.', 'इस खोज से कोई परिवार नहीं मिला।')}
+        </ServerNote>
+      ) : null}
+
+      {households.data?.source ? (
+        <p className="text-[0.8rem] leading-relaxed text-ink-faint">
+          {t('Source', 'स्रोत')}: {households.data.source}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function AshaMessages({ params }) {
   const { language } = useAuth();
   const t = getT(language);
@@ -561,6 +736,22 @@ export function AshaMessages({ params }) {
                   deva={deva}
                 />
               )}
+            </div>
+          </section>
+
+          {/* ================= 03 · Writing first ================= */}
+          <section className="mt-14">
+            <SectionHead
+              index="03"
+              eyebrow={t('Start a conversation', 'बातचीत शुरू करें')}
+              title={t('Write to a household', 'किसी परिवार को लिखें')}
+              sub={t(
+                'A household does not have to write to you first. Opening a conversation sends them a notice that you have started one; it does not send a message, so write to them afterwards.',
+                'ज़रूरी नहीं कि परिवार पहले आपको लिखे। बातचीत खोलने पर उन्हें सूचना जाती है कि आपने बातचीत शुरू की है; इससे कोई संदेश नहीं जाता, इसलिए उसके बाद उन्हें लिखें।',
+              )}
+            />
+            <div className="mt-6">
+              <StartPanel t={t} deva={deva} onOpened={refreshAll} />
             </div>
           </section>
         </>

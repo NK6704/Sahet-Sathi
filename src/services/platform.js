@@ -154,6 +154,37 @@ export function getAshaThreadSummary() {
   return authedFetch('/api/asha/threads/summary');
 }
 
+/**
+ * The households in the worker's own assigned villages.
+ *
+ * `{ households: [{ userId, fullName, villageId, village, registeredAt }],
+ *    villages, source, note? }`
+ *
+ * Only families who have registered on Sehat Sathi appear. The `source`
+ * sentence says exactly that and should be rendered — a worker reading
+ * this list must not take it for her household register. No phone
+ * numbers are returned; this list exists so she can write first.
+ */
+export function getAshaHouseholds() {
+  return authedFetch('/api/asha/households');
+}
+
+/**
+ * The worker opens the conversation. Find-or-create, like the citizen side.
+ *
+ * POST /api/messages/threads cannot serve this: it keys the caller as
+ * `citizen_id`, so a worker calling it for her own village resolves to
+ * herself and is refused by `check (citizen_id <> asha_id)`. Returns
+ * `{ thread, created, householdNotified }` — `householdNotified` is
+ * whether the in-app notice actually reached them, and is worth showing.
+ */
+export function openAshaThread({ citizenId, subject } = {}) {
+  return authedFetch('/api/asha/messages/threads', {
+    method: 'POST',
+    body: JSON.stringify({ citizenId, ...(subject ? { subject } : {}) }),
+  });
+}
+
 /* ---- Emergency SOS ------------------------------------------ */
 
 /**

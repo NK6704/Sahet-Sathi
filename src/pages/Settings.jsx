@@ -20,14 +20,14 @@ export function Settings() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 pb-24 md:pb-12 space-y-6">
       {/* Header */}
-      <div className="border-b border-[#ded5c2] pb-4">
-        <span className="rounded-full bg-[#f2e7d5] px-3 py-1 text-xs font-bold text-[#8a572a] uppercase">
+      <div className="border-b border-rule pb-4">
+        <span className="rounded-full bg-paper-2 px-3 py-1 text-xs font-bold text-amber uppercase">
           {isHindi ? 'सेटिंग्स व नियंत्रण' : 'Preferences & Offline Controls'}
         </span>
-        <h1 className="mt-2 font-display text-3xl font-bold text-[#214e4a] sm:text-4xl">
+        <h1 className="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">
           {isHindi ? 'ऐप सेटिंग्स व ऑफ़लाइन मोड' : 'Settings & Offline Access'}
         </h1>
-        <p className="text-xs text-[#607970]">
+        <p className="text-xs text-ink-soft">
           {isHindi
             ? 'कम इंटरनेट वाले क्षेत्रों के लिए ऑफ़लाइन कैशिंग, भाषा प्राथमिकता और गोपनीयता अनुमतियाँ।'
             : 'Configure low-connectivity caching, audio synthesis parameters, and data privacy rights.'}
@@ -35,30 +35,30 @@ export function Settings() {
       </div>
 
       {clearedNotice && (
-        <div className="rounded-2xl border border-[#a8dec4] bg-[#e7f5ed] p-3 text-xs font-bold text-[#166534] appear">
+        <div className="rounded-2xl border border-seal/25 bg-seal-soft p-3 text-xs font-bold text-seal appear">
           {isHindi ? 'स्थानीय कैश साफ़ किया गया।' : 'Local application cache cleared.'}
         </div>
       )}
 
       {/* Settings Options */}
-      <div className="rounded-3xl border border-[#ded5c2] bg-[#fbf8ef] p-6 space-y-5 shadow-xs">
+      <div className="rounded-3xl border border-rule bg-paper-2 p-6 space-y-5 shadow-xs">
         {/* Language Selection */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ded5c2] pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-4">
           <div>
-            <p className="font-bold text-sm text-[#214e4a]">{isHindi ? 'डिफ़ॉल्ट भाषा' : 'Primary Language'}</p>
-            <p className="text-xs text-[#627a72]">{isHindi ? 'बोलने व पढ़ने के लिए' : 'Voice and text interface language'}</p>
+            <p className="font-bold text-sm text-ink">{isHindi ? 'डिफ़ॉल्ट भाषा' : 'Primary Language'}</p>
+            <p className="text-xs text-ink-soft">{isHindi ? 'बोलने व पढ़ने के लिए' : 'Voice and text interface language'}</p>
           </div>
           <LanguageSelector language={language} setLanguage={setLanguage} />
         </div>
 
         {/* Offline Cache Mode Simulation */}
-        <div className="flex items-start justify-between gap-3 border-b border-[#ded5c2] pb-4">
+        <div className="flex items-start justify-between gap-3 border-b border-rule pb-4">
           <div>
-            <p className="font-bold text-sm text-[#214e4a] flex items-center gap-2">
-              {offlineMode ? <WifiOff size={16} className="text-[#b74636]" /> : <Wifi size={16} className="text-[#1f655d]" />}
+            <p className="font-bold text-sm text-ink flex items-center gap-2">
+              {offlineMode ? <WifiOff size={16} className="text-siren" /> : <Wifi size={16} className="text-seal" />}
               <span>{isHindi ? 'ग्रामीण ऑफ़लाइन मोड (Low Connectivity)' : 'Rural Offline Mode'}</span>
             </p>
-            <p className="text-xs text-[#627a72]">
+            <p className="text-xs text-ink-soft">
               {isHindi ? 'इंटरनेट न होने पर भी जरूरी प्राथमिक उपचार व योजना विवरण तुरंत दिखाएं' : 'Preload essential health first-aid and scheme guidelines for zero-network rural areas'}
             </p>
           </div>
@@ -66,11 +66,11 @@ export function Settings() {
           <button
             onClick={() => setOfflineMode(!offlineMode)}
             className={`relative h-6 w-11 shrink-0 rounded-full p-0.5 transition ${
-              offlineMode ? 'bg-[#1f655d]' : 'bg-[#c7c2b4]'
+              offlineMode ? 'bg-seal' : 'bg-rule'
             }`}
           >
             <span
-              className={`block h-5 w-5 rounded-full bg-[#f9f2df] shadow-xs transition-transform ${
+              className={`block h-5 w-5 rounded-full bg-paper-2 shadow-xs transition-transform ${
                 offlineMode ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -78,20 +78,20 @@ export function Settings() {
         </div>
 
         {/* Consent & Privacy */}
-        <div className="flex items-start justify-between gap-3 border-b border-[#ded5c2] pb-4">
+        <div className="flex items-start justify-between gap-3 border-b border-rule pb-4">
           <div>
-            <p className="font-bold text-sm text-[#214e4a] flex items-center gap-2">
-              <ShieldCheck size={16} className="text-[#1f655d]" />
+            <p className="font-bold text-sm text-ink flex items-center gap-2">
+              <ShieldCheck size={16} className="text-seal" />
               <span>{isHindi ? 'डेटा गोपनीयता व सहमति प्रबंधन' : 'Privacy & Consents'}</span>
             </p>
-            <p className="text-xs text-[#627a72]">
+            <p className="text-xs text-ink-soft">
               {isHindi ? 'आवाज़, स्थान व स्वास्थ्य रिकॉर्ड अनुमतियों को बदलें' : 'Manage STT, GPS location, and ASHA referral permissions'}
             </p>
           </div>
 
           <button
             onClick={() => setConsentOpen(true)}
-            className="rounded-full bg-[#1f655d] px-4 py-1.5 text-xs font-bold text-[#f9f2df] hover:bg-[#18534c]"
+            className="rounded-full bg-seal px-4 py-1.5 text-xs font-bold text-paper-2 hover:bg-seal"
           >
             {isHindi ? 'सहमति देखें' : 'Manage'}
           </button>
@@ -100,18 +100,18 @@ export function Settings() {
         {/* Clear Local Storage */}
         <div className="flex items-start justify-between gap-3 pt-1">
           <div>
-            <p className="font-bold text-sm text-[#214e4a] flex items-center gap-2">
-              <Database size={16} className="text-[#8a572a]" />
+            <p className="font-bold text-sm text-ink flex items-center gap-2">
+              <Database size={16} className="text-amber" />
               <span>{isHindi ? 'स्थानीय कैश साफ़ करें' : 'Clear Local Cache'}</span>
             </p>
-            <p className="text-xs text-[#627a72]">
+            <p className="text-xs text-ink-soft">
               {isHindi ? 'सुरक्षित की गई योजनाओं और हाल की बातचीत का डेटा रीसेट करें' : 'Reset stored preferences and temporary conversation logs'}
             </p>
           </div>
 
           <button
             onClick={handleClearCache}
-            className="flex items-center gap-1 rounded-full border border-[#dacfb9] bg-[#fbf7ec] px-4 py-1.5 text-xs font-bold text-[#b74636] hover:bg-[#fdedea]"
+            className="flex items-center gap-1 rounded-full border border-rule bg-paper-2 px-4 py-1.5 text-xs font-bold text-siren hover:bg-siren-soft"
           >
             <Trash2 size={13} />
             <span>{isHindi ? 'साफ़ करें' : 'Clear'}</span>
@@ -120,8 +120,8 @@ export function Settings() {
       </div>
 
       {/* Official Health Mission Attribution */}
-      <div className="rounded-3xl bg-[#eef5f1] border border-[#cbd9cc] p-6 text-xs text-[#2a4d47] space-y-2">
-        <div className="flex items-center gap-2 font-bold text-sm text-[#1f655d]">
+      <div className="rounded-3xl bg-seal-soft border border-rule p-6 text-xs text-ink space-y-2">
+        <div className="flex items-center gap-2 font-bold text-sm text-seal">
           <HeartHandshake size={18} />
           <span>{isHindi ? 'आधिकारिक स्वास्थ्य सेवा डिस्क्लेमर' : 'Official Public Health Disclaimer'}</span>
         </div>

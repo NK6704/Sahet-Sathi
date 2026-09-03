@@ -28,9 +28,13 @@ import { Btn, Eyebrow, LoadingState } from '@/components/ds';
    ============================================================= */
 
 /**
- * Both roles sign in at the same form, because there is one sign-in
- * form in the app. It reads the path stashed below and words itself
- * for whichever door was knocked on.
+ * Where a signed-out visitor to a staff route is sent.
+ *
+ * The staff entrance, not the household one at /signin. Both exist and
+ * they are not interchangeable: /signin issues a citizen session with no
+ * roster check behind it, so sending a worker there would give her an
+ * account that cannot open the screen she was trying to reach. The path
+ * she was headed for is stashed below, and /asha/login reads it back.
  */
 const ENTRANCE = '/asha/login';
 

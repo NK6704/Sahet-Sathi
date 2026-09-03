@@ -22,7 +22,7 @@ import { getT, SUPPORTED_LANGUAGES } from '@/services/i18n';
 import { useScrolled } from '@/lib/motion';
 
 /** Pages that provide their own full-bleed chrome. */
-const HIDE_ON = ['/onboarding', '/asha/login'];
+const HIDE_ON = ['/onboarding', '/asha/login', '/signin'];
 
 /**
  * Dispatched by src/pages/Notifications.jsx when read state moves, so
@@ -163,7 +163,20 @@ export function Header() {
                 <MessageSquare size={17} aria-hidden="true" />
               </Link>
             </>
-          ) : null}
+          ) : (
+            /* Signed out. Until this link existed there was no way into
+               /signin from the chrome at all, so the only people who found
+               it were the ones who had already hit a screen that turned
+               them away. An account is what stores the village, and the
+               village is what connects a household to its ASHA worker. */
+            <Link
+              href="/signin"
+              className="btn btn-outline h-11 min-h-0 text-sm"
+              data-testid="link-header-signin"
+            >
+              {t('Sign in', 'साइन इन')}
+            </Link>
+          )}
 
           <label className="sr-only" htmlFor="lang-select">
             {t.languageLabel}
@@ -276,6 +289,20 @@ export function Header() {
                 </Link>
               ))}
             </div>
+
+            {/* The same missing door as on desktop. The links above all
+                work signed out; these two are the ones that cannot,
+                because a notice and a conversation both belong to a
+                person rather than to a device. */}
+            {!isAuthenticated ? (
+              <Link
+                href="/signin"
+                onClick={() => setMenuOpen(false)}
+                className="btn btn-outline w-full"
+              >
+                {t('Sign in', 'साइन इन')}
+              </Link>
+            ) : null}
           </div>
         </div>
       )}

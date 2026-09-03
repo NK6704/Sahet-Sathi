@@ -1,11 +1,4 @@
 import { supabase } from '@/lib/supabase';
-import {
-  SAMPLE_ALERTS,
-  SAMPLE_REFERRALS,
-  SAMPLE_FACILITIES,
-  SAMPLE_CAMPS,
-  SAMPLE_ASHA,
-} from '@/services/ashaSample';
 
 /* =============================================================
    The ASHA portal's data layer.
@@ -16,15 +9,33 @@ import {
    need to be audited or to touch anything a client should not be
    trusted with go through /api/asha/*.
 
-   Every function returns real data when a project is connected and
-   sample data when it is not, so the portal is walkable either way.
+   NOTHING HERE INVENTS A ROW. This module used to fall back to a
+   sample dataset whenever no Supabase project was configured, which
+   put a fictional worker ("Demo ASHA worker, DEMO-0001, Demo
+   Sub-centre") and fictional patient alerts in front of somebody who
+   had no way of telling them apart from real ones. An ASHA portal
+   that shows an invented referral is worse than one that shows an
+   error, because she may act on it.
+
+   With no project configured every function now throws a single
+   clear error, which the pages already render as an error state.
    ============================================================= */
 
-const usingSample = () => !supabase;
-
-/** Simulated latency, so loading states are visible while developing. */
-const settle = (value, ms = 260) =>
-  new Promise((resolve) => setTimeout(() => resolve(value), ms));
+/**
+ * Every read and write in this module needs a configured project.
+ * Throwing here — rather than returning a plausible-looking row — is
+ * the whole point: an unconfigured deployment is a deployment fault,
+ * not a state the ASHA portal should be designed to look normal in.
+ */
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error(
+      'This device has no connection to the Sehat Sathi database, so no ' +
+        'records can be shown. Ask whoever set up this phone to check the ' +
+        'app configuration.',
+    );
+  }
+}
 
 /* -------------------------------------------------------------
    Referral status vocabulary — the seven states from the brief.
@@ -67,10 +78,7 @@ const SEVERITY_RANK = { critical: 0, high: 1, moderate: 2, low: 3 };
    Dashboard
    ------------------------------------------------------------- */
 export async function getDashboard(ashaId) {
-  if (usingSample()) {
-    return settle(buildDashboard(SAMPLE_ALERTS, SAMPLE_REFERRALS, SAMPLE_ASHA));
-  }
-
+  requireSupabase();
   const [alertsRes, referralsRes, ashaRes] = await Promise.all([
     supabase
       .from('asha_alerts')
@@ -136,10 +144,7 @@ function buildDashboard(alerts, referrals, asha) {
    Alerts
    ------------------------------------------------------------- */
 export async function listAlerts(ashaId, { status, severity, search } = {}) {
-  if (usingSample()) {
-    return settle(filterAlerts(SAMPLE_ALERTS, { status, severity, search }));
-  }
-
+  requireSupabase();
   let q = supabase.from('asha_alerts').select('*').eq('asha_id', ashaId);
   if (status && status !== 'all') q = q.eq('status', status);
   if (severity && severity !== 'all') q = q.eq('severity', severity);
@@ -170,9 +175,7 @@ function filterAlerts(rows, { status, severity, search }) {
 }
 
 export async function getAlert(id) {
-  if (usingSample()) {
-    return settle(SAMPLE_ALERTS.find((a) => a.id === id) ?? null);
-  }
+  requireSupabase();
   const { data, error } = await supabase
     .from('asha_alerts')
     .select('*')
@@ -183,12 +186,7 @@ export async function getAlert(id) {
 }
 
 export async function updateAlert(id, patch) {
-  if (usingSample()) {
-    const row = SAMPLE_ALERTS.find((a) => a.id === id);
-    if (row) Object.assign(row, patch);
-    return settle(row, 150);
-  }
-
+  requireSupabase();
   const stamped = { ...patch };
   if (patch.status === 'acknowledged' && !patch.acknowledged_at) {
     stamped.acknowledged_at = new Date().toISOString();
@@ -213,10 +211,7 @@ export async function updateAlert(id, patch) {
    Referrals
    ------------------------------------------------------------- */
 export async function listReferrals(ashaId, { status, search } = {}) {
-  if (usingSample()) {
-    return settle(filterReferrals(SAMPLE_REFERRALS, { status, search }));
-  }
-
+  requireSupabase();
   let q = supabase.from('referrals').select('*').eq('asha_id', ashaId);
   if (status && status !== 'all') q = q.eq('status', status);
 
@@ -241,9 +236,7 @@ function filterReferrals(rows, { status, search }) {
 }
 
 export async function getReferral(id) {
-  if (usingSample()) {
-    return settle(SAMPLE_REFERRALS.find((r) => r.id === id) ?? null);
-  }
+  requireSupabase();
   const { data, error } = await supabase
     .from('referrals')
     .select('*, referral_events(*)')
@@ -254,18 +247,7 @@ export async function getReferral(id) {
 }
 
 export async function createReferral(ashaId, payload) {
-  if (usingSample()) {
-    const row = {
-      id: `r-${Date.now()}`,
-      status: 'pending',
-      referred_on: new Date().toISOString().slice(0, 10),
-      created_at: new Date().toISOString(),
-      ...payload,
-    };
-    SAMPLE_REFERRALS.unshift(row);
-    return settle(row, 200);
-  }
-
+  requireSupabase();
   const { data, error } = await supabase
     .from('referrals')
     .insert({ ...payload, asha_id: ashaId })
@@ -281,12 +263,7 @@ export async function createReferral(ashaId, payload) {
 }
 
 export async function updateReferral(id, patch) {
-  if (usingSample()) {
-    const row = SAMPLE_REFERRALS.find((r) => r.id === id);
-    if (row) Object.assign(row, patch);
-    return settle(row, 180);
-  }
-
+  requireSupabase();
   const stamped = { ...patch };
   if (patch.status === 'resolved' && !patch.visited_on) {
     stamped.visited_on = new Date().toISOString().slice(0, 10);
@@ -309,20 +286,7 @@ export async function updateReferral(id, patch) {
    Reference data
    ------------------------------------------------------------- */
 export async function listFacilities({ search, kind } = {}) {
-  if (usingSample()) {
-    let out = SAMPLE_FACILITIES;
-    if (kind && kind !== 'all') out = out.filter((f) => f.kind === kind);
-    if (search) {
-      const q = search.toLowerCase();
-      out = out.filter((f) =>
-        [f.name, f.village, f.block, f.district, ...(f.services || [])]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q)),
-      );
-    }
-    return settle(out);
-  }
-
+  requireSupabase();
   let q = supabase.from('healthcare_facilities').select('*').eq('active', true);
   if (kind && kind !== 'all') q = q.eq('kind', kind);
   if (search) q = q.ilike('name', `%${search}%`);
@@ -357,8 +321,7 @@ export async function listSchemes({ search, category } = {}) {
  * far better answer than a camp that was quietly cancelled.
  */
 export async function listCamps({ from } = {}) {
-  if (usingSample()) return settle(SAMPLE_CAMPS);
-
+  requireSupabase();
   const since = from || new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from('health_camps')
@@ -376,11 +339,7 @@ export async function listCamps({ from } = {}) {
    Profile
    ------------------------------------------------------------- */
 export async function updateAshaProfile(ashaId, patch) {
-  if (usingSample()) {
-    Object.assign(SAMPLE_ASHA, patch);
-    return settle(SAMPLE_ASHA, 180);
-  }
-
+  requireSupabase();
   const profileFields = ['full_name', 'phone', 'language', 'district', 'state', 'village'];
   const ashaFields = [
     'block',

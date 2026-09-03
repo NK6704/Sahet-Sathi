@@ -15,6 +15,7 @@ import { ashaAuthRouter } from "./server/routes/ashaAuth";
 import { notificationsRouter } from "./server/routes/notifications";
 import { messagingRouter } from "./server/routes/messaging";
 import { sosRouter } from "./server/routes/sos";
+import { profileRouter } from "./server/routes/profile";
 import { aiRouter } from "./server/routes/ai";
 
 const app = express();
@@ -37,7 +38,35 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
-// Resilient Model Cascade & Retry Helper to gracefully handle 503 / 429 high-demand spikes
+/* Resilient model cascade.
+ *
+ * Two Gemini failures matter to somebody waiting for an answer, and
+ * they need opposite handling:
+ *
+ *   · 503 / 429 is the model being busy. Worth one short retry.
+ *   · 404 "model not found" is a name that will never work on this
+ *     key. Retrying it costs a network round-trip on EVERY request
+ *     for the life of the process — which on a patchy rural
+ *     connection is seconds of silence before the assistant says
+ *     anything at all.
+ *
+ * So a name that comes back "not found" is struck off for the life of
+ * the process, and the model that actually answered is remembered and
+ * tried first next time. The first request pays for the cascade; the
+ * ones after it do not.
+ */
+const deadModels = new Set<string>();
+const preferredModel = new Map<string, string>();
+
+function isMissingModel(lowerMessage: string): boolean {
+  return (
+    lowerMessage.includes("404") ||
+    lowerMessage.includes("not found") ||
+    lowerMessage.includes("is not supported") ||
+    lowerMessage.includes("does not exist")
+  );
+}
+
 async function callGeminiSafe<T>(
   candidateModels: string[],
   generateFn: (gemini: GoogleGenAI, model: string) => Promise<any>,
@@ -45,42 +74,56 @@ async function callGeminiSafe<T>(
 ): Promise<T | null> {
   const gemini = getGeminiClient();
   if (!gemini) {
-    console.error("[Gemini] No API key found in .env.local");
+    console.error("[Gemini] No API key configured; skipping model call.");
     return null;
   }
 
-  for (const model of candidateModels) {
+  const cacheKey = candidateModels.join("|");
+  const winner = preferredModel.get(cacheKey);
+
+  // Known-good first, then the declared order, minus anything this
+  // process has already been told does not exist.
+  const order = [
+    ...(winner ? [winner] : []),
+    ...candidateModels.filter((m) => m !== winner),
+  ].filter((m) => !deadModels.has(m));
+
+  // Every candidate struck off. Try the declared list again rather
+  // than return null without having asked anybody.
+  const models = order.length > 0 ? order : candidateModels;
+
+  for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        console.log(`[Gemini] Calling model: ${model} (attempt ${attempt + 1})`);
         const aiResponse = await generateFn(gemini, model);
         const text = aiResponse?.text;
         if (text) {
-          console.log(`[Gemini] Successful response from ${model}`);
+          if (winner !== model) {
+            console.log(`[Gemini] Answering with ${model}`);
+            preferredModel.set(cacheKey, model);
+          }
           if (parseFn) {
             try {
               return parseFn(text);
             } catch {
               const cleaned = text.replace(/```json\n?|\n?```/g, "").trim();
               return JSON.parse(cleaned);
-  }
-}
-
-function queryNumber(value: unknown): number | null {
-  if (Array.isArray(value)) value = value[0];
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
+            }
+          }
           return text as unknown as T;
         }
+        // A 200 carrying no text will not become text on a retry.
+        break;
       } catch (err: any) {
-        console.warn(`[Gemini] Error calling ${model}:`, err?.message || err);
         const errMsg = (err?.message || String(err)).toLowerCase();
+        console.warn(`[Gemini] ${model} failed: ${err?.message || err}`);
+
+        if (isMissingModel(errMsg)) {
+          deadModels.add(model);
+          if (preferredModel.get(cacheKey) === model) preferredModel.delete(cacheKey);
+          break;
+        }
+
         const isTransient =
           errMsg.includes("503") ||
           errMsg.includes("429") ||
@@ -94,12 +137,29 @@ function clampNumber(value: number, min: number, max: number): number {
           await new Promise((r) => setTimeout(r, 300));
           continue;
         }
-        // Move to the next model in the cascade
+        // Move on to the next model in the cascade.
         break;
       }
     }
   }
+
   return null;
+}
+
+/* Query-string coercion. Express hands us `string | string[] |
+   undefined`, and a repeated parameter (?lat=1&lat=2) arrives as an
+   array — so take the first and let anything non-finite fall through
+   as null rather than NaN, which would silently poison a distance
+   calculation downstream. */
+function queryNumber(value: unknown): number | null {
+  if (Array.isArray(value)) value = value[0];
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 // In-Memory Database & Seed Records
@@ -374,20 +434,25 @@ const CURATED_SCHEMES: SchemeRecord[] = [
 // queues live in public.asha_alerts. Both survive a restart, which an
 // in-memory array never did. See server/routes/sos.ts.
 
-// Session-local, and deliberately empty of any person.
+// A profile with nobody in it.
 //
-// This used to describe an invented woman — name, phone number, age,
+// This used to be `activeUserProfile`, a mutable module-scope object that
+// PATCH /api/profile wrote to. It was replaced because a single shared
+// object cannot represent two people using the app at once, and because
+// what it held was thrown away on restart.
+//
+// Before that it described an invented woman — name, phone number, age,
 // district, village, a "BPL (Priority Household)" ration card and a
 // chronic condition. The ration card was the dangerous part: it was fed
 // into the eligibility check below and into the assistant prompt, so the
 // app told whoever was using it that they held a card nobody had seen.
 //
-// The real profile is public.profiles, read with the caller's own token.
-// What remains here is an unauthenticated scratch object that PATCH
-// /api/profile writes to for the duration of the process, so nothing is
-// asserted about anybody until they type it themselves. Every field is
-// null or empty on purpose: a null renders as a blank the user can fill
-// in, whereas a plausible default renders as a fact about them.
+// The real profile is public.profiles, read with the caller's own token by
+// server/routes/profile.ts. What survives here is the fallback the two
+// routes that accept a profile in the request body use when none is sent:
+// every field null or empty, so the answer is shaped by what the person
+// actually typed and nothing else. A null renders as a blank they can fill
+// in; a plausible default renders as a fact about them.
 interface SessionProfile {
   name: string | null;
   phone: string | null;
@@ -405,7 +470,7 @@ interface SessionProfile {
   saved_schemes: string[];
 }
 
-let activeUserProfile: SessionProfile = {
+const EMPTY_PROFILE: SessionProfile = {
   name: null,
   phone: null,
   age: null,
@@ -603,7 +668,7 @@ app.post("/api/assistant/message", async (req, res) => {
     const {
       message,
       language = "English",
-      userProfile = activeUserProfile,
+      userProfile = EMPTY_PROFILE,
       location = null,
       lat = null,
       lng = null,
@@ -1215,7 +1280,7 @@ Format as JSON:
 // one of three states — met, not_met, unknown — and unknown is what most of
 // them are, because nobody has been asked yet.
 app.post("/api/schemes/eligibility", (req, res) => {
-  const { schemeId, profile = activeUserProfile } = req.body;
+  const { schemeId, profile = EMPTY_PROFILE } = req.body;
   const scheme = CURATED_SCHEMES.find(s => s.id === schemeId);
 
   if (!scheme) {
@@ -1565,22 +1630,22 @@ Language: ${language}`;
   }
 });
 
-// 10. GET & PATCH /api/profile - Profile & Consents
-app.get("/api/profile", (req, res) => {
-  res.json(activeUserProfile);
-});
-
-app.patch("/api/profile", (req, res) => {
-  activeUserProfile = {
-    ...activeUserProfile,
-    ...req.body,
-    consents: {
-      ...activeUserProfile.consents,
-      ...(req.body.consents || {})
-    }
-  };
-  res.json(activeUserProfile);
-});
+// 10. GET & PATCH /api/profile — moved to server/routes/profile.ts.
+//
+// The handlers that used to live here read and wrote `activeUserProfile`,
+// one object in the server process shared by every request. Nothing
+// reached public.profiles, and the cost was not merely that details went
+// unsaved: profiles.village_id is the ONLY link between a household and
+// its ASHA worker, and nothing on the citizen side ever set it. So
+// GET /api/asha/contact, opening a conversation, SOS worker routing and
+// the whole village broadcast fan-out all took their "we do not know your
+// village" branch permanently — a registered, approved, village-mapped
+// worker stayed invisible to every household she covers.
+//
+// The replacement is authenticated, persists to public.profiles with the
+// caller's own token, and turns the village she types into a villages row
+// via public.resolve_village(). It is mounted with the other routers at
+// the bottom of this file. Requires supabase/10_profile_village.sql.
 
 // 11-14. The old in-memory emergency, n8n and ASHA dashboard routes —
 // retired.
@@ -1774,6 +1839,7 @@ app.use("/api", notificationsRouter);
 app.use("/api", messagingRouter);
 app.use("/api", sosRouter);
 app.use("/api", aiRouter);
+app.use("/api", profileRouter);
 
 // Anything under /api that reached this point matched no route. Answering
 // with JSON matters because the SPA fallback below would otherwise hand

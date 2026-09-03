@@ -20,15 +20,15 @@ export function Benefits() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 pb-24 md:pb-12 space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#ded5c2] pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rule pb-4">
         <div>
-          <span className="rounded-full bg-[#f2e7d5] px-3 py-1 text-xs font-bold text-[#8a572a] uppercase">
+          <span className="rounded-full bg-paper-2 px-3 py-1 text-xs font-bold text-amber uppercase">
             {isHindi ? 'सरकारी योजना लाभ ट्रैकर' : 'Direct Benefit Tracker'}
           </span>
-          <h1 className="mt-2 font-display text-3xl font-bold text-[#214e4a] sm:text-4xl">
+          <h1 className="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">
             {isHindi ? 'योजना लाभ व आवेदन स्थिति' : 'Active Schemes & Claims'}
           </h1>
-          <p className="text-xs text-[#607970]">
+          <p className="text-xs text-ink-soft">
             {isHindi
               ? 'आपके परिवार द्वारा आवेदित सरकारी स्वास्थ्य योजनाओं के अनुमोदन, वित्तीय सहायता राशि, और अगले कदम का सीधा विवरण।'
               : 'Real-time lifecycle tracking of health insurance cards, maternity DBT transfers, and hospital admission approvals.'}
@@ -37,7 +37,7 @@ export function Benefits() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-xs font-bold text-[#1f655d] animate-pulse">
+        <div className="py-12 text-center text-xs font-bold text-seal animate-pulse">
           {isHindi ? 'लाभ ट्रैकर लोड हो रहा है…' : 'Loading benefit tracker…'}
         </div>
       ) : (
@@ -47,41 +47,41 @@ export function Benefits() {
             {trackerData?.active_applications?.map((app) => (
               <div
                 key={app.id}
-                className="rounded-3xl border border-[#ded5c2] bg-[#fbf8ef] p-6 shadow-xs"
+                className="rounded-3xl border border-rule bg-paper-2 p-6 shadow-xs"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#ded5c2] pb-3">
+                <div className="flex flex-wrap items-start justify-between gap-2 border-b border-rule pb-3">
                   <div>
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8a6b4a]">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-ink-faint">
                       Ref: {app.id}
                     </span>
-                    <h3 className="font-display text-xl font-bold text-[#214e4a]">
+                    <h3 className="font-display text-xl font-bold text-ink">
                       {app.scheme_name}
                     </h3>
                   </div>
 
-                  <span className="rounded-full bg-[#e7f5ed] border border-[#a8dec4] px-3 py-1 text-xs font-bold text-[#186b4d]">
+                  <span className="rounded-full bg-seal-soft border border-seal/25 px-3 py-1 text-xs font-bold text-seal">
                     ● {app.status}
                   </span>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="rounded-2xl bg-[#f5efe2] p-3">
-                    <p className="text-[#637d74] font-medium">{isHindi ? 'लाभार्थी' : 'Beneficiary'}</p>
-                    <p className="mt-1 font-bold text-[#214e4a]">{app.beneficiary}</p>
+                  <div className="rounded-2xl bg-paper-2 p-3">
+                    <p className="text-ink-soft font-medium">{isHindi ? 'लाभार्थी' : 'Beneficiary'}</p>
+                    <p className="mt-1 font-bold text-ink">{app.beneficiary}</p>
                   </div>
-                  <div className="rounded-2xl bg-[#f5efe2] p-3">
-                    <p className="text-[#637d74] font-medium">{isHindi ? 'सहायता राशि' : 'Sanctioned Amount'}</p>
-                    <p className="mt-1 font-bold text-[#8a572a]">{app.amount}</p>
+                  <div className="rounded-2xl bg-paper-2 p-3">
+                    <p className="text-ink-soft font-medium">{isHindi ? 'सहायता राशि' : 'Sanctioned Amount'}</p>
+                    <p className="mt-1 font-bold text-amber">{app.amount}</p>
                   </div>
-                  <div className="rounded-2xl bg-[#f5efe2] p-3">
-                    <p className="text-[#637d74] font-medium">{isHindi ? 'अंतिम अपडेट' : 'Last Updated'}</p>
-                    <p className="mt-1 font-bold text-[#214e4a]">{app.last_updated}</p>
+                  <div className="rounded-2xl bg-paper-2 p-3">
+                    <p className="text-ink-soft font-medium">{isHindi ? 'अंतिम अपडेट' : 'Last Updated'}</p>
+                    <p className="mt-1 font-bold text-ink">{app.last_updated}</p>
                   </div>
                 </div>
 
                 {/* Milestones Stepper */}
                 <div className="mt-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[#8a6b4a]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-ink-faint">
                     {isHindi ? 'प्रक्रिया के चरण:' : 'Progress Milestones:'}
                   </p>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -90,8 +90,8 @@ export function Benefits() {
                         key={idx}
                         className={`rounded-2xl p-2.5 text-xs ${
                           m.completed
-                            ? 'bg-[#dceee9] text-[#1f655d] font-bold'
-                            : 'bg-[#f5efe2] text-[#718b82]'
+                            ? 'bg-seal-soft text-seal font-bold'
+                            : 'bg-paper-2 text-ink-soft'
                         }`}
                       >
                         <p className="flex items-center gap-1">
@@ -104,8 +104,8 @@ export function Benefits() {
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl bg-[#fbf7ec] border border-[#ded5c2] p-3 text-xs text-[#5c726b]">
-                  <p className="font-bold text-[#214e4a]">
+                <div className="mt-4 rounded-2xl bg-paper-2 border border-rule p-3 text-xs text-ink-soft">
+                  <p className="font-bold text-ink">
                     📌 {isHindi ? 'अगली कार्रवाई' : 'Next Action'}:
                   </p>
                   <p className="mt-0.5">{app.next_step}</p>

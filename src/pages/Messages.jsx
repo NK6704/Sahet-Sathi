@@ -100,11 +100,31 @@ function ServerNote({ children }) {
   );
 }
 
+/**
+ * A village as one line of text.
+ *
+ * GET /api/asha/contact returns `village` as an object —
+ * { id, name, block, district, state } — because the id is needed
+ * elsewhere. This screen printed that object straight into JSX,
+ * which throws "Objects are not valid as a React child" and, with
+ * no error boundary above it, took the whole page to white. The
+ * branch only renders once a worker actually resolves, so the fault
+ * lay dormant until citizens' village_id started being written.
+ *
+ * A plain string is accepted too: older callers pass one, and the
+ * server may yet.
+ */
+function villageLabel(village) {
+  if (!village) return '';
+  if (typeof village === 'string') return village.trim();
+  return [village.name, village.block, village.district].filter(Boolean).join(', ');
+}
+
 /* -------------------------------------------------------------
    Her card: name, sub-centre, and a number you can press.
    ------------------------------------------------------------- */
 
-function ContactPanel({ contact, loading, error, onRetry, t, deva, onStart, starting, startError }) {
+function ContactPanel({ contact, loading, error, onRetry, t, deva, onStart, starting, startError, myId }) {
   if (loading) {
     return <LoadingState label={t('Finding your ASHA worker', 'आपकी आशा कार्यकर्ता खोज रहे हैं')} rows={1} />;
   }
@@ -178,12 +198,25 @@ function ContactPanel({ contact, loading, error, onRetry, t, deva, onStart, star
   }
 
   const alsoCovering = contact?.alsoCovering ?? [];
+  const village = villageLabel(contact?.village);
+  /* The worker covering this village is the person reading the page. Only
+     an ASHA worker signed in on the citizen side ever sees this, and it is
+     not an error: her card is correct, her village is correct, her number
+     is her own. The single thing that cannot happen is a conversation —
+     message_threads carries check (citizen_id <> asha_id) — so that one
+     button is replaced with the way in to her own register, rather than
+     left to fail with a message about herself. */
+  const isSelf = Boolean(myId && asha.userId && asha.userId === myId);
 
   return (
     <div className="space-y-4">
       <Card tone="asha" className="p-5 sm:p-7">
         <div className="flex flex-wrap items-center gap-3">
-          <Eyebrow>{t('Your ASHA worker', 'आपकी आशा कार्यकर्ता')}</Eyebrow>
+          <Eyebrow>
+            {isSelf
+              ? t('You cover this village', 'इस गाँव की कार्यकर्ता आप हैं')
+              : t('Your ASHA worker', 'आपकी आशा कार्यकर्ता')}
+          </Eyebrow>
           {asha.isPrimary ? (
             <Pill tone="asha">{t('Primary for your village', 'आपके गाँव की मुख्य कार्यकर्ता')}</Pill>
           ) : null}
@@ -192,10 +225,10 @@ function ContactPanel({ contact, loading, error, onRetry, t, deva, onStart, star
         <h3 className="display-md mt-3 text-2xl sm:text-3xl">{asha.fullName}</h3>
 
         <div className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-          {contact.village ? (
+          {village ? (
             <div>
               <Eyebrow>{t('Village', 'गाँव')}</Eyebrow>
-              <p className="mt-1.5 text-[0.95rem] text-ink">{contact.village}</p>
+              <p className="mt-1.5 text-[0.95rem] text-ink">{village}</p>
             </div>
           ) : null}
           {asha.subCentre ? (
@@ -222,23 +255,39 @@ function ContactPanel({ contact, loading, error, onRetry, t, deva, onStart, star
           {/* A call is the fastest thing available to somebody standing
               in a courtyard with a sick child, so it is the primary
               action and the number is shown in full above it. */}
-          {asha.phone ? (
+          {asha.phone && !isSelf ? (
             <Btn as="a" href={`tel:${asha.phone}`} variant="asha" size="lg">
               <Phone size={18} aria-hidden="true" />
               {t('Call her now', 'अभी कॉल करें')}
             </Btn>
           ) : null}
-          <Btn variant="outline" size="lg" onClick={() => onStart(asha)} disabled={starting}>
-            {starting ? (
-              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
-            ) : (
+          {isSelf ? (
+            <Btn as={Link} href="/asha/messages" variant="asha" size="lg">
               <MessageSquare size={18} aria-hidden="true" />
-            )}
-            {t('Send a message instead', 'संदेश भेजें')}
-          </Btn>
+              {t('Open my conversations', 'मेरी बातचीत खोलें')}
+            </Btn>
+          ) : (
+            <Btn variant="outline" size="lg" onClick={() => onStart(asha)} disabled={starting}>
+              {starting ? (
+                <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <MessageSquare size={18} aria-hidden="true" />
+              )}
+              {t('Send a message instead', 'संदेश भेजें')}
+            </Btn>
+          )}
         </div>
 
-        {!asha.phone ? (
+        {isSelf ? (
+          <p className="mt-5 text-[0.85rem] leading-relaxed text-ink-faint">
+            {t(
+              'These are your own details, because you are the worker recorded for this village. A household here sees exactly this card. To write to one of them, open your conversations and start one there.',
+              'ये आपकी ही जानकारी है, क्योंकि इस गाँव के लिए दर्ज कार्यकर्ता आप हैं। यहाँ का कोई परिवार यही कार्ड देखता है। किसी परिवार को लिखने के लिए अपनी बातचीत खोलें और वहीं से शुरू करें।',
+            )}
+          </p>
+        ) : null}
+
+        {!asha.phone && !isSelf ? (
           <p className="mt-5 text-[0.85rem] leading-relaxed text-ink-faint">
             {t(
               'Her number is not on record, so messaging is the only way to reach her from here.',
@@ -607,7 +656,13 @@ function ThreadList({ threads, note, t, deva }) {
 }
 
 export function Messages({ params }) {
-  const { language, isAuthenticated, loading: authLoading } = useAuth();
+  const { language, isAuthenticated, loading: authLoading, user } = useAuth();
+  /* Only used to notice the one case that cannot work: an ASHA worker
+     signed in on the citizen side, whose own village resolves her to
+     herself. Everything on this page still renders for her — the card is
+     hers and it is correct — but a conversation with yourself is not a
+     thing message_threads will hold. */
+  const myId = user?.id ?? null;
   const t = getT(language);
   const deva = t.isHindi;
   const [, navigate] = useLocation();
@@ -665,7 +720,7 @@ export function Messages({ params }) {
               'कौन-सी आशा कार्यकर्ता आपके क्षेत्र में है, यह आपकी प्रोफ़ाइल के गाँव पर निर्भर करता है — इसलिए पहले पहचान ज़रूरी है।',
             )}
             action={
-              <Btn as={Link} href="/onboarding">
+              <Btn as={Link} href="/signin">
                 {t('Sign in', 'साइन इन')}
               </Btn>
             }
@@ -695,6 +750,7 @@ export function Messages({ params }) {
                 onStart={startConversation}
                 starting={starting}
                 startError={startError}
+                myId={myId}
               />
             </div>
           </section>
