@@ -265,29 +265,23 @@ export function ErrorState({
    ------------------------------------------------------------- */
 
 export function Waveform({ bars = 28, active = true, className = '' }) {
-  return (
-    <div
-      className={`flex h-12 items-center gap-[3px] ${className}`}
-      aria-hidden="true"
-    >
-      {Array.from({ length: bars }).map((_, i) => {
-        // A fixed pseudo-random profile, so the shape reads as a
-        // spoken phrase rather than an even equaliser.
-        const seed = Math.sin(i * 1.7) * 0.5 + 0.5;
-        const height = 18 + seed * 82;
+  // Render a lightweight single-element waveform placeholder instead
+  // of many animated <span> bars. This keeps the visual hint that a
+  // component listens while removing large DOM and inline animation
+  // attributes that caused rendering and overflow issues.
+  const style = {
+    height: '3rem',
+    width: '100%',
+    maxWidth: '28rem',
+    backgroundImage:
+      'repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 6px)',
+    backgroundSize: '6px 100%',
+    opacity: active ? 1 : 0.45,
+  };
 
-        return (
-          <span
-            key={i}
-            className={`${active ? 'wave-bar' : ''} w-[3px] rounded-full bg-current`}
-            style={{
-              height: `${height}%`,
-              animationDelay: `${(i % 9) * 90}ms`,
-              animationDuration: `${1000 + (i % 5) * 160}ms`,
-            }}
-          />
-        );
-      })}
+  return (
+    <div className={`${className}`} aria-hidden="true">
+      <div style={style} className="rounded-sm" />
     </div>
   );
 }

@@ -218,10 +218,41 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     line-height: 1;
-    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    /* allow internal truncation rather than overflowing the container */
+    white-space: normal;
     transform: rotate(-2.5deg);
     /* the slight ink bleed of a real rubber stamp */
     box-shadow: 0 0 0 2.5px rgb(255 255 255 / 0.35);
+  }
+
+  /* Ensure icon does not shrink and text fragments can truncate */
+  .stamp > * {
+    min-width: 0;
+  }
+
+  .stamp :is(svg, .lucide) {
+    flex: 0 0 auto;
+  }
+
+  .stamp span {
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 10.5rem; /* reasonable cap to avoid overflow in small cards */
+    vertical-align: middle;
+  }
+
+  /* On very narrow screens, remove rotation to avoid cutting off edges */
+  @media (max-width: 520px) {
+    .stamp {
+      transform: none;
+    }
+    .stamp span {
+      max-width: 8rem;
+    }
   }
 
   /* Proven: sourced from a verified government dataset. */
@@ -559,7 +590,19 @@
 }
 
 .is-listening {
-  animation: listening 1.6s ease-in-out infinite;
+  /* keep legacy class for compatibility, but only animate when the
+     element actually intends to show a pulse. Some pages toggled
+     `is-listening` for layout only which caused blinking; this makes
+     animation explicit via the data-animate attribute. */
+}
+
+/* Animate only when data-animate is true and reduced-motion allows it */
+/* A steady highlight while listening. Pulsing animation caused
+   distracting blinking on some devices or when the listening state
+   toggled rapidly; use a subtle static ring instead. */
+button[data-animate="true"].is-listening {
+  animation: none;
+  box-shadow: 0 0 0 8px rgb(200 30 99 / 0.08), 0 8px 24px -8px rgb(16 22 19 / 0.12);
 }
 
 /* Live waveform bars in the hero voice card. */

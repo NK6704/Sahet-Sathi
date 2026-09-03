@@ -63,8 +63,19 @@ async function callGeminiSafe<T>(
             } catch {
               const cleaned = text.replace(/```json\n?|\n?```/g, "").trim();
               return JSON.parse(cleaned);
-            }
-          }
+  }
+}
+
+function queryNumber(value: unknown): number | null {
+  if (Array.isArray(value)) value = value[0];
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
           return text as unknown as T;
         }
       } catch (err: any) {
@@ -1048,6 +1059,54 @@ app.get("/api/schemes/:id", (req, res) => {
     return res.status(404).json({ error: "Scheme not found" });
   }
   res.json(scheme);
+});
+
+// 5b. GET /api/schemes/:id/eligible-hospitals - nearby PM-JAY hospitals for a scheme
+app.get("/api/schemes/:id/eligible-hospitals", async (req, res) => {
+  try {
+    const scheme = CURATED_SCHEMES.find((s) => s.id === req.params.id);
+    if (!scheme) {
+      return res.status(404).json({ error: "Scheme not found" });
+    }
+
+    const lat = queryNumber(req.query.lat);
+    const lng = queryNumber(req.query.lng);
+    const radiusKm = clampNumber(queryNumber(req.query.radiusKm) ?? 25, 1, 100);
+
+    if (lat === null || lng === null) {
+      return res.json({
+        schemeId: scheme.id,
+        schemeName: scheme.name,
+        schemeCategory: scheme.category,
+        hospitals: [],
+        count: 0,
+        radiusKm,
+        note: "Share your location to see scheme-eligible hospitals near you.",
+      });
+    }
+
+    const nearby = await nearestHospitals(lat, lng, 20, radiusKm);
+
+    res.json({
+      schemeId: scheme.id,
+      schemeName: scheme.name,
+      schemeCategory: scheme.category,
+      hospitals: nearby.hospitals,
+      count: nearby.hospitals.length,
+      radiusKm,
+      note:
+        nearby.hospitals.length === 0
+          ? nearby.note ??
+            `No PM-JAY empanelled hospitals found within ${radiusKm} km. Try widening the search or searching by district.`
+          : `These hospitals are empanelled under PM-JAY and may offer services related to ${scheme.name}. Confirm directly before visiting.`,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error:
+        error?.message ||
+        "Could not load scheme-eligible hospitals right now.",
+    });
+  }
 });
 
 // 6. POST /api/schemes/search-live - Live Search Fallback (Tavily/Gov domain grounding)

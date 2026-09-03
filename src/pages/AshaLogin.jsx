@@ -260,18 +260,7 @@ export function AshaLogin() {
             </div>
           ) : null}
 
-          <div className="mt-7 border-t border-rule pt-6">
-            <Btn variant="outline" className="w-full" onClick={handleGoogle} disabled={busy}>
-              <LogIn size={17} aria-hidden="true" />
-              {t('Continue with Google', 'Google से जारी रखें')}
-            </Btn>
-            <p className="mt-3 text-[0.8rem] leading-relaxed text-ink-faint">
-              {t(
-                'Google proves your email address and nothing more. It does not make an account an ASHA account — that still needs your roster code or an administrator’s approval.',
-                'Google केवल आपका ईमेल पता प्रमाणित करता है। इससे खाता आशा खाता नहीं बनता — उसके लिए रोस्टर कोड या प्रशासक की स्वीकृति चाहिए।',
-              )}
-            </p>
-          </div>
+          {/* Google Sign-in removed as requested — only email/password and roster registration allowed */}
 
           <div className="mt-7 border-t border-rule pt-6">
             <div className="flex items-start gap-2.5">

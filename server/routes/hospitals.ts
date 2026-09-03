@@ -80,6 +80,8 @@ const TYPE_LABELS: Record<string, string> = {
   PP: "Public-private",
 };
 
+const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
+
 /**
  * city and pincode are missing from both column lists on purpose. They
  * are null in every row, and selecting them would only tempt a template
@@ -217,6 +219,39 @@ function likeContains(value: string): string {
 
 type Row = Record<string, any>;
 
+async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ placeName: string | null; locality: string | null }> {
+  try {
+    const res = await fetch(
+      `${NOMINATIM_URL}?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: { "User-Agent": "sehat-sathi/1.0" },
+        signal: AbortSignal.timeout(3000),
+      },
+    );
+
+    if (!res.ok) return { placeName: null, locality: null };
+
+    const data = (await res.json()) as any;
+    const addr = data?.address ?? {};
+
+    return {
+      placeName: data?.display_name ?? null,
+      locality:
+        addr.village ??
+        addr.town ??
+        addr.suburb ??
+        addr.neighbourhood ??
+        addr.county ??
+        null,
+    };
+  } catch {
+    return { placeName: null, locality: null };
+  }
+}
+
 /**
  * The fields every source of hospital rows has in common, whether the
  * row came from the table or from the hospitals_nearby function.
@@ -291,7 +326,29 @@ function detailHospital(row: Row): Record<string, unknown> {
  * anything relative to the coordinate the caller supplied.
  */
 function nearbyHospital(row: Row): Record<string, unknown> {
-  return { ...baseHospital(row), distanceKm: row.distance_km ?? null };
+  return {
+    ...baseHospital(row),
+    distanceKm: row.distance_km ?? null,
+    placeName: row.place_name ?? null,
+    locality: row.locality ?? null,
+  };
+}
+
+async function enrichNearbyRows(rows: Row[]): Promise<Record<string, unknown>[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      const lat = row.latitude ?? null;
+      const lng = row.longitude ?? null;
+
+      if (lat !== null && lng !== null) {
+        const geo = await reverseGeocode(Number(lat), Number(lng));
+        row.place_name = geo.placeName;
+        row.locality = geo.locality;
+      }
+
+      return nearbyHospital(row);
+    }),
+  );
 }
 
 function rowsOf(
@@ -370,7 +427,7 @@ hospitalsRouter.get(
       );
     }
 
-    const hospitals = ((data ?? []) as Row[]).map(nearbyHospital);
+    const hospitals = await enrichNearbyRows((data ?? []) as Row[]);
 
     res.json({
       hospitals,
@@ -455,7 +512,7 @@ export async function nearestHospitals(
       };
     }
 
-    const hospitals = ((data ?? []) as Row[]).map(nearbyHospital);
+    const hospitals = await enrichNearbyRows((data ?? []) as Row[]);
     return {
       hospitals,
       note:

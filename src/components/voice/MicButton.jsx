@@ -55,6 +55,7 @@ export function MicButton({
             : t('Start speaking', 'बोलना शुरू करें')
         }
         aria-pressed={!!isListening}
+        data-animate={isListening && !isLoading}
         className={`group relative flex flex-col items-center justify-center rounded-[1.75rem] border-[1.5px]
           transition-[transform,background-color,border-color] duration-200 active:translate-y-px
           disabled:cursor-not-allowed disabled:opacity-60

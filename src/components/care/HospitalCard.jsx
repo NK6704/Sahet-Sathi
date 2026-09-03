@@ -14,7 +14,7 @@ import { isHindiLang } from '@/services/i18n';
    One hospital from the National Health Authority's PM-JAY
    empanelment registry.
 
-   PROP CONTRACT — other pages import this component, so it does
+   PROP CONTRACT - other pages import this component, so it does
    not change shape without a note in the build report:
 
      hospital          A row exactly as /api/hospitals/nearby,
@@ -46,30 +46,16 @@ import { isHindiLang } from '@/services/i18n';
         ringing a dead number during an emergency is the specific
         harm being avoided.
      3. `source`, `sourceUrl` and `verification` are printed, not
-        filtered out. They are the reason someone can trust — or
-        sensibly distrust — the row above them.
+        filtered out. They are the reason someone can trust - or
+        sensibly distrust - the row above them.
    ============================================================= */
 
-/**
- * The registry rounds distance to two decimals. Below 10 km one
- * decimal is the honest resolution for a straight-line measurement;
- * above that the decimal is noise.
- */
 function formatKm(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return null;
   return n < 10 ? n.toFixed(1) : String(Math.round(n));
 }
 
-/**
- * Registry phone fields often carry two numbers in one string,
- * separated by a comma or a slash, and sometimes an extension after
- * them. Stripping the punctuation from the whole string would splice
- * them into one number that dials nowhere, so each part is taken
- * separately and only the leading number token in it is dialled.
- * Anything too short to be a phone number is dropped rather than
- * shown.
- */
 function phoneNumbers(...fields) {
   const out = [];
 
@@ -115,14 +101,14 @@ export function HospitalCard({
   const lng = Number(hospital.longitude);
   const mappable = Number.isFinite(lat) && Number.isFinite(lng);
 
-  // The registry's own words for the type. An unmapped code is shown
-  // as the code rather than guessed at.
   const typeLabel = hospital.type || hospital.typeCode || null;
   const government = hospital.typeCode === 'G';
 
-  // `district` is absent, not empty, when the NHA district list was
-  // unreachable at import time. `state` is the denormalised name.
-  const place = [hospital.district, hospital.state].filter(Boolean).join(' · ');
+  const place = Array.from(
+    new Set([hospital.locality, hospital.district, hospital.state].filter(Boolean)),
+  ).join(' · ');
+  const placeName =
+    !hospital.address && hospital.placeName ? String(hospital.placeName) : null;
 
   const codes = Array.isArray(hospital.specialityCodes) ? hospital.specialityCodes : [];
   const named = specialityLabels
@@ -138,7 +124,6 @@ export function HospitalCard({
       className={`flex flex-col p-5 sm:p-6 ${className}`}
       data-testid={`card-hospital-${hospital.id ?? hospital.facilityId ?? ''}`}
     >
-      {/* ---- Row head: type on the left, distance as the headline ---- */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-baseline gap-2.5">
@@ -165,24 +150,23 @@ export function HospitalCard({
         ) : null}
       </div>
 
-      {/* ---- Name ---- */}
       <h3 className="mt-4 text-xl font-semibold leading-snug text-ink">
         {hospital.name}
       </h3>
 
-      {/* ---- Where it is ---- */}
-      {hospital.address || place ? (
+      {hospital.address || place || placeName ? (
         <p className="mt-3 flex items-start gap-2.5 text-[0.9rem] leading-relaxed text-ink-soft">
           <MapPin size={15} className="mt-1 shrink-0 text-ink-faint" aria-hidden="true" />
           <span>
             {hospital.address}
-            {hospital.address && place ? <br /> : null}
+            {hospital.address && (placeName || place) ? <br /> : null}
+            {placeName ? <span className="text-ink-faint">{placeName}</span> : null}
+            {placeName && place ? <br /> : null}
             {place ? <span className="text-ink-faint">{place}</span> : null}
           </span>
         </p>
       ) : null}
 
-      {/* ---- Specialities, by name only ---- */}
       {shownSpecialities.length || codes.length ? (
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           <Stethoscope size={15} className="mr-0.5 shrink-0 text-ink-faint" aria-hidden="true" />
@@ -208,7 +192,6 @@ export function HospitalCard({
         </div>
       ) : null}
 
-      {/* ---- Actions ---- */}
       <div className="mt-auto pt-5">
         <div className="flex flex-wrap gap-2">
           {phones.map((p) => (
@@ -250,7 +233,7 @@ export function HospitalCard({
             <span>
               {t(
                 'This number is as listed in the registry. Sehat Sathi has not called it to check that it works.',
-                'यह नंबर रजिस्टर में दर्ज है। सेहत साथी ने इसे मिलाकर जाँचा नहीं है।',
+                'यह नंबर रजिस्टर में जैसा दर्ज है वैसा ही दिखाया गया है। सेहत साथी ने इसे मिलाकर जाँचा नहीं है।',
               )}
             </span>
           </p>
@@ -266,7 +249,6 @@ export function HospitalCard({
         ) : null}
       </div>
 
-      {/* ---- Provenance. Not fine print: the reason to trust the row ---- */}
       <div className="mt-5 border-t border-rule pt-4">
         <Stamp
           kind={official ? 'verified' : 'inferred'}
@@ -276,9 +258,6 @@ export function HospitalCard({
               : t('Listing not verified', 'सूची असत्यापित')
           }
         />
-        {/* Printed only when the row actually carries a source. An
-            empty "Source:" line would imply a provenance that is not
-            there, which is the opposite of the point. */}
         <p className="mt-3.5 font-mono text-[0.66rem] uppercase leading-relaxed tracking-[0.08em] text-ink-faint">
           {hospital.source ? t('Source: ', 'स्रोत: ') : null}
           {hospital.source && hospital.sourceUrl ? (

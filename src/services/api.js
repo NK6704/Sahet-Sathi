@@ -353,6 +353,16 @@ export function checkSchemeEligibility(schemeId, profile) {
   });
 }
 
+export function getEligibleSchemeHospitals(schemeId, { lat, lng, radiusKm } = {}) {
+  return request(
+    `/schemes/${encodeURIComponent(schemeId)}/eligible-hospitals${qs({
+      lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
+      lng: Number.isFinite(Number(lng)) ? Number(lng) : null,
+      radiusKm,
+    })}`,
+  );
+}
+
 /* =============================================================
    Profile and benefits
    ============================================================= */

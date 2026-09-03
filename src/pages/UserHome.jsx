@@ -133,7 +133,7 @@ export function UserHome() {
             <div className="text-asha-bright lg:justify-self-end lg:pl-6">
               <Waveform bars={30} className="w-full max-w-sm" />
               <p className="mt-4 font-mono text-[0.66rem] uppercase tracking-[0.14em] text-paper/45">
-                {t('11 languages · works on 2G', '11 भाषाएँ · 2G पर भी')}
+                {t('11 languages', '11 भाषाएँ')}
               </p>
             </div>
           </div>

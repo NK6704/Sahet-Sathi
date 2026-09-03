@@ -10,11 +10,14 @@ import {
   Calculator,
   Building2,
   Phone,
+  LocateFixed,
+  Loader2,
 } from 'lucide-react';
 import { useAppState } from '@/state/store';
-import { getSchemeById } from '@/services/api';
+import { getEligibleSchemeHospitals, getSchemeById } from '@/services/api';
 import { LiveSourceBadge } from '@/components/common/LiveSourceBadge';
 import { EligibilityModal } from '@/components/schemes/EligibilityModal';
+import { HospitalCard } from '@/components/care/HospitalCard';
 import {
   Btn,
   Card,
@@ -49,6 +52,12 @@ export function SchemeDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [eligibilityOpen, setEligibilityOpen] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const [geoStatus, setGeoStatus] = useState('idle');
+  const [eligibleHospitals, setEligibleHospitals] = useState([]);
+  const [eligibleNote, setEligibleNote] = useState('');
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [eligibleError, setEligibleError] = useState(null);
 
   const isSaved = schemeId ? savedSchemeIds.includes(schemeId) : false;
 
@@ -65,6 +74,70 @@ export function SchemeDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGeoStatus('unsupported');
+      return;
+    }
+
+    setGeoStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoStatus('ready');
+      },
+      (err) => {
+        setGeoStatus(err?.code === 1 ? 'denied' : 'failed');
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.permissions?.query || coords || geoStatus !== 'idle') return undefined;
+
+    let cancelled = false;
+
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((status) => {
+        if (!cancelled && status.state === 'granted') requestLocation();
+      })
+      .catch(() => {
+        /* Permissions API unavailable. The button still works. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coords, geoStatus, requestLocation]);
+
+  useEffect(() => {
+    if (!schemeId || !coords) return undefined;
+
+    let cancelled = false;
+    setEligibleLoading(true);
+    setEligibleError(null);
+
+    getEligibleSchemeHospitals(schemeId, coords)
+      .then((data) => {
+        if (cancelled) return;
+        setEligibleHospitals(data?.hospitals || []);
+        setEligibleNote(data?.note || '');
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setEligibleError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setEligibleLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [schemeId, coords]);
 
   const back = (
     <Link
@@ -126,6 +199,20 @@ export function SchemeDetail() {
 
   const steps = scheme.application_process?.steps ?? [];
   const docs = scheme.documents_required ?? [];
+  const geoMessage = {
+    denied: t(
+      'Location permission was refused, so we cannot search nearby hospitals for this scheme.',
+      'लोकेशन की अनुमति नहीं मिली, इसलिए हम इस योजना के लिए पास के अस्पताल नहीं खोज सकते।',
+    ),
+    failed: t(
+      'Your phone could not provide a location just now. Try again to search nearby hospitals.',
+      'अभी फ़ोन से लोकेशन नहीं मिल सकी। पास के अस्पताल खोजने के लिए फिर कोशिश करें।',
+    ),
+    unsupported: t(
+      'This browser does not support location sharing for nearby hospital search.',
+      'यह ब्राउज़र पास के अस्पताल खोजने के लिए लोकेशन शेयरिंग का समर्थन नहीं करता।',
+    ),
+  }[geoStatus];
 
   return (
     <main className={`shell reg-paper pad-bottom-nav pt-6 sm:pt-8 ${hi ? 'is-deva' : ''}`}>
@@ -287,6 +374,105 @@ export function SchemeDetail() {
           </div>
         </section>
       ) : null}
+
+      <section className="mt-12 pb-4">
+        <SectionHead
+          index="003"
+          eyebrow={t('Nearby hospitals', 'पास के अस्पताल')}
+          title={t(
+            'PM-JAY hospitals where you can start from',
+            'पीएम-जय अस्पताल जहाँ से आप शुरुआत कर सकते हैं',
+          )}
+          sub={t(
+            'Share your location to see nearby PM-JAY empanelled hospitals for this scheme. The list is still a directory, not a guarantee of admission or approval.',
+            'अपनी लोकेशन साझा करें ताकि इस योजना के लिए पास के पीएम-जय सूचीबद्ध अस्पताल दिख सकें। यह सूची केवल दिशा देती है, प्रवेश या स्वीकृति की गारंटी नहीं है।',
+          )}
+        />
+
+        {!coords ? (
+          <Card className="mt-6 p-6">
+            <p className="text-[0.92rem] leading-relaxed text-ink-soft">
+              {t(
+                'We only show nearby hospitals when your phone gives a real location. Nothing is guessed from your profile.',
+                'हम पास के अस्पताल तभी दिखाते हैं जब फ़ोन सचमुच लोकेशन दे। आपकी प्रोफ़ाइल से कोई जगह नहीं गढ़ी जाती।',
+              )}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Btn onClick={requestLocation} disabled={geoStatus === 'locating'}>
+                {geoStatus === 'locating' ? (
+                  <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <LocateFixed size={16} aria-hidden="true" />
+                )}
+                {geoStatus === 'locating'
+                  ? t('Finding your location...', 'आपकी लोकेशन खोज रहे हैं...')
+                  : t('Use my location', 'मेरी लोकेशन इस्तेमाल करें')}
+              </Btn>
+            </div>
+            {geoMessage ? (
+              <p className="mt-4 text-[0.85rem] leading-relaxed text-amber">{geoMessage}</p>
+            ) : null}
+          </Card>
+        ) : eligibleLoading ? (
+          <LoadingState
+            className="mt-6"
+            label={t('Loading hospitals', 'अस्पताल लोड हो रहे हैं')}
+            rows={2}
+          />
+        ) : eligibleError ? (
+          <ErrorState
+            className="mt-6"
+            title={t(
+              "Couldn't load nearby hospitals",
+              'पास के अस्पताल लोड नहीं हो सके',
+            )}
+            body={
+              eligibleError.message ||
+              t(
+                'The hospital registry could not be reached right now. Try again in a moment.',
+                'अभी अस्पताल रजिस्टर तक पहुँचा नहीं जा सका। थोड़ी देर में फिर कोशिश करें।',
+              )
+            }
+            onRetry={requestLocation}
+            retryLabel={t('Try again', 'फिर कोशिश करें')}
+          />
+        ) : eligibleHospitals.length ? (
+          <>
+            {eligibleNote ? (
+              <Card className="mt-6 p-5">
+                <p className="text-[0.9rem] leading-relaxed text-ink-soft">{eligibleNote}</p>
+              </Card>
+            ) : null}
+            <div className="mt-6 grid gap-5 lg:grid-cols-2">
+              {eligibleHospitals.map((hospital, index) => (
+                <HospitalCard
+                  key={hospital.id ?? hospital.facilityId ?? index}
+                  hospital={hospital}
+                  language={language}
+                  index={String(index + 1).padStart(2, '0')}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <EmptyState
+            className="mt-6"
+            title={t('No nearby hospitals found', 'पास में कोई अस्पताल नहीं मिला')}
+            body={
+              eligibleNote ||
+              t(
+                'No PM-JAY empanelled hospitals were found for this location.',
+                'इस लोकेशन के लिए कोई पीएम-जय सूचीबद्ध अस्पताल नहीं मिला।',
+              )
+            }
+            action={
+              <Btn variant="outline" onClick={requestLocation}>
+                {t('Refresh location', 'लोकेशन फिर लें')}
+              </Btn>
+            }
+          />
+        )}
+      </section>
 
       <EligibilityModal
         scheme={scheme}

@@ -363,6 +363,7 @@ export function Profile() {
   const [saving, setSaving] = useState(false);
   // null until a save has been attempted, then {ok} or {ok:false, error}.
   const [saveOutcome, setSaveOutcome] = useState(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   /* null means "not seeded yet". The form is seeded once, when the
      profile request settles, and never again: re-seeding on every
@@ -714,6 +715,16 @@ export function Profile() {
             signedIn={isAuthenticated}
             t={t}
           />
+          <div className="mt-4">
+            <Btn variant="outline" onClick={() => setShowDebug((s) => !s)}>
+              {showDebug ? 'Hide debug' : 'Show debug'}
+            </Btn>
+            {showDebug ? (
+              <Card className="mt-3 p-4">
+                <pre className="text-xs max-h-48 overflow-auto">{JSON.stringify({ userProfile, contact: { data: contact.data, loading: contact.loading, error: contact.error } }, null, 2)}</pre>
+              </Card>
+            ) : null}
+          </div>
         </div>
       </section>
 
