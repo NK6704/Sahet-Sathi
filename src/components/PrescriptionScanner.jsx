@@ -200,10 +200,22 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                       <span>{t.patient}: <strong className="font-semibold">{result.patient_info.patient_name}</strong></span>
                     </div>
                   )}
+                  {result.patient_info.uhid && (
+                    <div className="flex items-center gap-1.5">
+                      <FileCheck2 size={14} className="text-seal shrink-0" />
+                      <span>UHID/IP: <strong className="font-semibold">{result.patient_info.uhid}</strong></span>
+                    </div>
+                  )}
                   {result.patient_info.date && (
                     <div className="flex items-center gap-1.5">
                       <Calendar size={14} className="text-seal shrink-0" />
                       <span>{t.date}: {result.patient_info.date}</span>
+                    </div>
+                  )}
+                  {result.patient_info.doctor_registration && (
+                    <div className="flex items-center gap-1.5 col-span-1 sm:col-span-2">
+                      <Award size={14} className="text-seal shrink-0" />
+                      <span>Reg No: <strong className="font-semibold">{result.patient_info.doctor_registration}</strong></span>
                     </div>
                   )}
                 </div>
@@ -273,6 +285,11 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                     {result.medicines.length} {t.medicinesCount}
                   </span>
                 </div>
+                
+                <div className="bg-amber-50 text-amber-900 text-[11px] p-2 rounded-lg border border-amber-200 flex items-start gap-1.5">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  <p><strong>Warning:</strong> AI may misread handwriting (e.g. 5% as 10%). Always compare dosages with your original image before taking medication.</p>
+                </div>
 
                 <div className="space-y-2">
                   {result.medicines.map((med, idx) => (
@@ -283,6 +300,11 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                           <span className="text-amber-600 text-xs ml-2 font-normal">({t.unclear})</span>
                         )}
                       </p>
+                      {med.confidence && (
+                        <p className={`text-[10px] font-semibold mt-1 px-1.5 py-0.5 inline-block rounded ${med.confidence.toLowerCase().includes('low') ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'}`}>
+                          Confidence: {med.confidence}
+                        </p>
+                      )}
                       {med.generic_equivalent && (
                         <div className="bg-emerald-50 text-emerald-800 font-semibold p-1.5 rounded-lg mt-1 text-[11px]">
                           🏷️ <strong>{t.genericJanAushadhi}</strong> {med.generic_equivalent}
@@ -334,6 +356,19 @@ export default function PrescriptionScanner({ language: propLanguage }) {
                     <li key={i}>{p}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {/* Raw Transcription */}
+            {result.raw_transcription && (
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 mt-4 text-xs text-gray-700">
+                <p className="font-bold flex items-center gap-1.5 text-gray-900 mb-2">
+                  <FileCheck2 size={15} className="text-gray-600" />
+                  <span>Raw Exact Transcription</span>
+                </p>
+                <pre className="whitespace-pre-wrap font-mono text-[10px] leading-relaxed">
+                  {result.raw_transcription}
+                </pre>
               </div>
             )}
 

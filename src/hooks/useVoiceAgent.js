@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getVoiceLiveToken } from '@/services/api';
 
 const LIVE_WS_URL =
-  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
+  'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained';
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
 const PROCESSOR_BUFFER_SIZE = 2048;
@@ -60,6 +60,7 @@ export function useVoiceAgent({
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
+  const [volume, setVolume] = useState(0);
 
   const wsRef = useRef(null);
   const streamRef = useRef(null);
@@ -123,12 +124,8 @@ export function useVoiceAgent({
   const playAudioChunk = useCallback(async (base64) => {
     if (!base64) return;
 
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-
-    const context =
-      playbackContextRef.current || new AudioContextCtor({ sampleRate: OUTPUT_RATE });
-    playbackContextRef.current = context;
+    const context = playbackContextRef.current;
+    if (!context) return;
 
     if (context.state === 'suspended') {
       await context.resume();
@@ -145,13 +142,10 @@ export function useVoiceAgent({
   }, []);
 
   const startCapture = useCallback(async (ws, stream) => {
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) {
+    const context = captureContextRef.current;
+    if (!context) {
       throw new Error('Audio capture is not supported in this browser.');
     }
-
-    const context = new AudioContextCtor({ sampleRate: INPUT_RATE });
-    captureContextRef.current = context;
 
     if (context.state === 'suspended') {
       await context.resume();
@@ -166,18 +160,30 @@ export function useVoiceAgent({
     source.connect(processor);
     processor.connect(context.destination);
 
-    processor.onaudioprocess = (event) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
+    processor.onaudioprocess = (e) => {
+      const inputBuffer = e.inputBuffer.getChannelData(0);
+      
+      // Calculate RMS volume (0.0 to 1.0)
+      let sumSquares = 0;
+      for (let i = 0; i < inputBuffer.length; i++) {
+        sumSquares += inputBuffer[i] * inputBuffer[i];
+      }
+      const rms = Math.sqrt(sumSquares / inputBuffer.length);
+      // Scale it up nicely for visualizer (usually RMS is very small, like 0.05 for normal speech)
+      setVolume(Math.min(1, rms * 10));
 
-      const input = event.inputBuffer.getChannelData(0);
-      const pcm16 = floatTo16BitPCM(input);
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      
+      const pcm16 = floatTo16BitPCM(inputBuffer);
       ws.send(
         JSON.stringify({
           realtimeInput: {
-            audio: {
-              data: toBase64(pcm16),
-              mimeType: `audio/pcm;rate=${INPUT_RATE}`,
-            },
+            mediaChunks: [
+              {
+                data: toBase64(pcm16),
+                mimeType: `audio/pcm;rate=${INPUT_RATE}`,
+              },
+            ],
           },
         }),
       );
@@ -188,26 +194,73 @@ export function useVoiceAgent({
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+        ws.send(
+          JSON.stringify({
+            clientContent: {
+              turns: [{ role: 'user', parts: [{ text: ' ' }] }],
+              turnComplete: true,
+            },
+          }),
+        );
       } catch {
         /* ignore send errors on shutdown */
       }
     }
-    cleanup();
-  }, [cleanup]);
+    
+    // Pause microphone capture but leave WebSocket open
+    if (processorRef.current) {
+      processorRef.current.onaudioprocess = null;
+    }
+    setIsConnected(false);
+    setIsConnecting(false);
+  }, []);
 
   const start = useCallback(async () => {
     if (isConnected || isConnecting) return;
 
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      setIsConnected(true);
+      if (processorRef.current) {
+        processorRef.current.onaudioprocess = (event) => {
+          const ws = wsRef.current;
+          if (ws?.readyState !== WebSocket.OPEN) return;
+          const input = event.inputBuffer.getChannelData(0);
+          const pcm16 = floatTo16BitPCM(input);
+          ws.send(
+            JSON.stringify({
+              realtimeInput: {
+                mediaChunks: [
+                  {
+                    data: toBase64(pcm16),
+                    mimeType: `audio/pcm;rate=${INPUT_RATE}`,
+                  },
+                ],
+              },
+            }),
+          );
+        };
+      }
+      return;
+    }
+
+    setIsConnecting(true);
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Microphone access is not available in this browser.');
       return;
     }
 
     setError(null);
-    setIsConnecting(true);
 
     try {
+      // Eagerly initialize AudioContexts during the user gesture to prevent browser blocking
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (!captureContextRef.current && AudioContextCtor) {
+        captureContextRef.current = new AudioContextCtor({ sampleRate: INPUT_RATE });
+      }
+      if (!playbackContextRef.current && AudioContextCtor) {
+        playbackContextRef.current = new AudioContextCtor({ sampleRate: OUTPUT_RATE });
+      }
+
       const session = await getVoiceLiveToken();
       const token = session?.token;
       const modelName = String(session?.config?.model || session?.model || '').replace(
@@ -230,42 +283,43 @@ export function useVoiceAgent({
       });
       streamRef.current = stream;
 
-      const ws = new WebSocket(`${LIVE_WS_URL}?access_token=${encodeURIComponent(token)}`);
+      const wsUrl = `${LIVE_WS_URL}?access_token=${encodeURIComponent(token)}`;
+      console.log('[useVoiceAgent] Connecting to WS:', LIVE_WS_URL);
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        const setup = {
-          setup: {
-            model: `models/${modelName}`,
-            generationConfig: { responseModalities: ['AUDIO'] },
-            realtimeInputConfig: {
-              automaticActivityDetection: {},
-            },
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Aoede' },
+        console.log('[useVoiceAgent] WS OPENED. Sending setup...');
+        ws.send(
+          JSON.stringify({
+            setup: {
+              model: `models/${modelName}`,
+              systemInstruction: {
+                parts: [{ text: session?.config?.systemInstruction || '' }],
               },
+              generationConfig: {
+                responseModalities: session?.config?.responseModalities || ['AUDIO'],
+              },
+              realtimeInputConfig: {
+                automaticActivityDetection: {}
+              }
             },
-          },
-        };
-
-        if (session?.config?.systemInstruction) {
-          setup.setup.systemInstruction = {
-            parts: [{ text: session.config.systemInstruction }],
-          };
-        }
-
-        ws.send(JSON.stringify(setup));
+          }),
+        );
       };
 
       ws.onmessage = async (event) => {
         let message;
 
         try {
-          message = JSON.parse(event.data);
-        } catch {
+          let textData = event.data;
+          if (textData instanceof Blob) {
+            textData = await textData.text();
+          }
+          message = JSON.parse(textData);
+          console.log('[useVoiceAgent] Received WS message keys:', Object.keys(message));
+        } catch (err) {
+          console.error('[useVoiceAgent] Error parsing WS message:', err);
           return;
         }
 
@@ -310,12 +364,14 @@ export function useVoiceAgent({
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error('[useVoiceAgent] WS ERROR:', err);
         setError('Live voice connection failed.');
         cleanup();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log('[useVoiceAgent] WS CLOSED', event.code, event.reason);
         cleanup({ closeSocket: false });
       };
     } catch (err) {
@@ -324,7 +380,9 @@ export function useVoiceAgent({
     }
   }, [cleanup, isConnected, isConnecting, onResponse, onTranscript, onTurnComplete, playAudioChunk, startCapture]);
 
-  useEffect(() => stop, [stop]);
+  useEffect(() => {
+    return () => cleanup();
+  }, [cleanup]);
 
   return {
     start,
@@ -332,6 +390,7 @@ export function useVoiceAgent({
     isConnected,
     isConnecting,
     error,
+    volume,
     language,
   };
 }

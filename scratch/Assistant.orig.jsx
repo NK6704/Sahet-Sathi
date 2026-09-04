@@ -65,9 +65,6 @@ export function Assistant() {
   const chatBottomRef = useRef(null);
   const sendRef = useRef(null);
   const welcomedRef = useRef(false);
-  const accumulatedTranscriptRef = useRef('');
-  const sendTimeoutRef = useRef(null);
-  const abortControllerRef = useRef(null);
 
   /* The person's own saved village is a fact we hold; a default for
      everyone else's is not. When neither exists, the header says so. */
@@ -201,27 +198,7 @@ export function Assistant() {
     const query = (textToSend || inputQuery).trim();
     if (!query || isLoading) return;
 
-    // Clear any pending debounced sends
-    if (sendTimeoutRef.current) {
-      clearTimeout(sendTimeoutRef.current);
-      sendTimeoutRef.current = null;
-    }
-    accumulatedTranscriptRef.current = '';
-
     stopSpeaking();
-    
-    // IMMEDIATELY stop the microphone so it doesn't hear the AI's own voice
-    if (voiceControllerRef.current) {
-      voiceControllerRef.current.stop();
-    }
-    setContinuousActive(false);
-    continuousModeRef.current = false;
-
-    // Abort any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
 
     const history = messages.slice(-6).map((m) => ({
       role: m.sender === 'assistant' ? 'assistant' : 'user',
@@ -282,14 +259,15 @@ export function Assistant() {
       ]);
 
       if (response.response) {
-        // Just speak the text. Do NOT auto-resume the microphone.
-        speakText(response.response, language);
+        speakText(response.response, language, () => {
+          if (continuousModeRef.current && voiceControllerRef.current) {
+            setTimeout(() => {
+              if (continuousModeRef.current) voiceControllerRef.current.start(true);
+            }, 600);
+          }
+        });
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        console.log('Search cancelled by user');
-        return;
-      }
       console.warn('Assistant error:', err);
       setMessages((prev) => [
         ...prev,
@@ -324,41 +302,11 @@ export function Assistant() {
         continuousModeRef.current = continuousMode;
       },
       onResult: ({ text, final, interim }) => {
-        if (sendTimeoutRef.current) {
-          clearTimeout(sendTimeoutRef.current);
-        }
-
+        setTranscript(final || text);
+        setInterimTranscript(interim);
         if (final && final.trim().length > 1) {
-          accumulatedTranscriptRef.current = accumulatedTranscriptRef.current
-            ? `${accumulatedTranscriptRef.current} ${final.trim()}`
-            : final.trim();
-          
-          setTranscript(accumulatedTranscriptRef.current);
-          setInterimTranscript('');
-          
-          sendTimeoutRef.current = setTimeout(() => {
-            if (accumulatedTranscriptRef.current.trim().length > 1) {
-              const fullText = accumulatedTranscriptRef.current.trim();
-              accumulatedTranscriptRef.current = '';
-              controller.pause();
-              sendRef.current?.(fullText, true);
-            }
-          }, 3500); // Wait 3.5 seconds before auto-sending to allow breaths
-        } else {
-          // Update visual transcript while they speak
-          setTranscript(accumulatedTranscriptRef.current);
-          setInterimTranscript(interim);
-          
-          if (accumulatedTranscriptRef.current || interim) {
-            sendTimeoutRef.current = setTimeout(() => {
-              const fallbackText = `${accumulatedTranscriptRef.current} ${interim}`.trim();
-              if (fallbackText.length > 1) {
-                accumulatedTranscriptRef.current = '';
-                controller.pause();
-                sendRef.current?.(fallbackText, true);
-              }
-            }, 4000); // slightly longer timeout if they are just pausing on an interim result
-          }
+          controller.pause();
+          sendRef.current?.(final.trim(), true);
         }
       },
       onError: (err) => console.warn('Voice error:', err),
@@ -368,7 +316,6 @@ export function Assistant() {
     voiceControllerRef.current = controller;
 
     return () => {
-      if (sendTimeoutRef.current) clearTimeout(sendTimeoutRef.current);
       controller.stop();
       stopSpeaking();
     };
@@ -381,15 +328,6 @@ export function Assistant() {
   const handleToggleListening = () => {
     const controller = voiceControllerRef.current;
     if (!controller) return;
-
-    if (isLoading) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      setIsLoading(false);
-      return;
-    }
 
     if (isListening || continuousActive) {
       controller.stop();
@@ -520,15 +458,21 @@ export function Assistant() {
             className="mt-4 w-full max-w-md text-asha-bright"
           />
 
-          {(transcript || interimTranscript) && (
-            <div className="mt-4 w-full max-w-lg">
+          {transcript || interimTranscript ? (
+            <div className="appear mt-5 w-full max-w-lg text-left">
               <TranscriptCard
                 transcript={transcript}
                 interim={interimTranscript}
+                onSubmit={() => handleSendMessage(transcript, true)}
+                onRetry={() => {
+                  setTranscript('');
+                  setInterimTranscript('');
+                  voiceControllerRef.current?.start(true);
+                }}
                 language={language}
               />
             </div>
-          )}
+          ) : null}
         </div>
       </section>
 

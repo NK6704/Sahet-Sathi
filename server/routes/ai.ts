@@ -51,7 +51,7 @@ export const aiRouter = Router();
  * The Live model. Named as a constant because /ai/status reports it to
  * the UI, and the microphone button is only drawn when the two agree.
  */
-const LIVE_MODEL = "gemini-live-2.5-flash-preview";
+const LIVE_MODEL = "gemini-2.5-flash-native-audio-latest";
 
 /**
  * Vision cascade for prescription reading, tried in order. 2.5-flash
@@ -217,8 +217,11 @@ aiRouter.post(
     const newSessionExpireTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
 
     const sessionConfig = {
-      responseModalities: [Modality.AUDIO],
+      responseModalities: ["AUDIO"] as any,
       systemInstruction,
+      realtimeInputConfig: {
+        automaticActivityDetection: {}
+      }
     };
 
     let tokenName: string | null = null;
@@ -285,7 +288,7 @@ aiRouter.post(
       model: LIVE_MODEL,
       config: {
         model: LIVE_MODEL,
-        responseModalities: [Modality.AUDIO],
+        responseModalities: ["AUDIO"],
         systemInstruction,
         language: caller.language,
       },

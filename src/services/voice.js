@@ -48,11 +48,11 @@ export class VoiceController {
 
       this.recognition.onerror = (event) => {
         console.warn('Speech recognition error:', event.error);
-        if (event.error === 'no-speech' && this.shouldKeepListening) {
+        if (event.error === 'no-speech' && this.shouldKeepListening && !this.isPaused) {
           // Auto restart if in continuous interactive mode
           setTimeout(() => {
-            if (this.shouldKeepListening && !this.isListening) {
-              this.start();
+            if (this.shouldKeepListening && !this.isPaused && !this.isListening) {
+              this.start(this.shouldKeepListening);
             }
           }, 400);
           return;
@@ -66,10 +66,10 @@ export class VoiceController {
         this.isListening = false;
         this.onStateChange({ isListening: false, continuousMode: this.shouldKeepListening });
         // If user has continuous voice session active, restart after brief pause
-        if (this.shouldKeepListening) {
+        if (this.shouldKeepListening && !this.isPaused) {
           setTimeout(() => {
-            if (this.shouldKeepListening && !this.isListening) {
-              this.start();
+            if (this.shouldKeepListening && !this.isPaused && !this.isListening) {
+              this.start(this.shouldKeepListening);
             }
           }, 300);
         }
@@ -107,6 +107,7 @@ export class VoiceController {
 
   start(continuous = true) {
     this.shouldKeepListening = continuous;
+    this.isPaused = false;
     if (this.recognition && !this.isListening) {
       try {
         this.recognition.start();
@@ -117,6 +118,7 @@ export class VoiceController {
   }
 
   pause() {
+    this.isPaused = true;
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
@@ -128,6 +130,7 @@ export class VoiceController {
 
   stop() {
     this.shouldKeepListening = false;
+    this.isPaused = false;
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();

@@ -129,10 +129,12 @@ export async function request(path, options = {}) {
     if (token) {
       finalHeaders.set('Authorization', `Bearer ${token}`);
     } else if (auth === true) {
-      throw apiError(
-        'You need to be signed in for this. Sign in and try again.',
-        { status: 401 },
-      );
+      // Trial Mode Bypass: we let it proceed to the backend without a token,
+      // and the backend will inject a mock user.
+      // throw apiError(
+      //   'You need to be signed in for this. Sign in and try again.',
+      //   { status: 401 },
+      // );
     }
   }
 
@@ -263,9 +265,11 @@ export function sendMessageToAssistant({
   lat,
   lng,
   conversationHistory,
+  signal,
 } = {}) {
   return request('/assistant/message', {
     method: 'POST',
+    signal,
     body: {
       message,
       language,

@@ -264,11 +264,18 @@ export function ErrorState({
    product is a voice, not a heartbeat icon.
    ------------------------------------------------------------- */
 
-export function Waveform({ bars = 28, active = true, className = '' }) {
+export function Waveform({ bars = 28, active = true, volume = null, className = '' }) {
   // Render a lightweight single-element waveform placeholder instead
   // of many animated <span> bars. This keeps the visual hint that a
   // component listens while removing large DOM and inline animation
   // attributes that caused rendering and overflow issues.
+  
+  // If volume is provided, we map it to scaleY.
+  // We add a tiny minimum scale (0.1) so it's not totally invisible when silent.
+  // We cap max scale at 1.0.
+  const scale = volume !== null ? Math.max(0.1, Math.min(1, volume)) : 1;
+  const opacityValue = active ? (volume !== null ? Math.max(0.4, scale) : 1) : 0.45;
+
   const style = {
     height: '3rem',
     width: '100%',
@@ -276,11 +283,14 @@ export function Waveform({ bars = 28, active = true, className = '' }) {
     backgroundImage:
       'repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 6px)',
     backgroundSize: '6px 100%',
-    opacity: active ? 1 : 0.45,
+    opacity: opacityValue,
+    transform: `scaleY(${scale})`,
+    transformOrigin: 'center',
+    transition: volume !== null ? 'transform 0.05s ease-out, opacity 0.05s ease-out' : 'opacity 0.3s',
   };
 
   return (
-    <div className={`${className}`} aria-hidden="true">
+    <div className={`${className}`} aria-hidden="true" style={{ overflow: 'hidden' }}>
       <div style={style} className="rounded-sm" />
     </div>
   );

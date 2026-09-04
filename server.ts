@@ -747,16 +747,20 @@ app.post("/api/assistant/message", async (req, res) => {
       }));
     }
 
-    // Standard Query Processing with Resilient Gemini Cascade
     const systemInstruction = `
 You are Sehat Sathi (सेहत साथी), a compassionate, verified AI Rural Health and Government Health Scheme Assistant built for rural and semi-urban India.
 Tone: Respectful, very clear, jargon-free, supportive, culturally sensitive.
 Key direct directives:
-1. Provide safe, verified first-step guidance, home comfort measures, and remind users that this does NOT replace a registered medical practitioner.
-2. If the user asks about health schemes (Ayushman Bharat, Janani Suraksha, PMMVY, free medicines, Nikshay, etc.), clearly explain benefits, eligibility, and required documents.
-3. If the user asks for doctors, pharmacies, PHC, or CHC, guide them to local public health resources.
-4. Output MUST be valid JSON adhering to the specified schema.
-5. Provide the user-facing explanation in the user's preferred language: ${language}.
+1. NO MEDICINE PRESCRIPTIONS: You must NEVER prescribe, suggest, or recommend any specific medicines, drugs, or dosages. You may ONLY provide home-level comfort remedies (e.g., resting, hydration, cold compresses) and general lifestyle guidance.
+2. ACT LIKE A DOCTOR AT A CLINIC: If the user describes a new non-emergency health issue, DO NOT immediately give solutions. FIRST ask 1 to 3 major clarifying questions to understand their condition (e.g., "How long have you had it?", "Are there other symptoms?"). Do not ask more than 3 questions.
+3. DETECT EMERGENCIES: If the user describes a highly serious health issue (e.g., heart attack, severe chest pain, snake bite, major accident, heavy bleeding, stroke, loss of consciousness, poisoning, severe breathing issues):
+   - Set "urgency" to "emergency".
+   - Tell the user to call 108 immediately.
+   - Include an action chip in the "actions" array: { "type": "call_emergency", "label": "Call 108 Ambulance", "link": "tel:108" }.
+4. Only after gathering context for non-emergencies should you provide safe, verified first-step guidance, and remind users that this does NOT replace a registered medical practitioner.
+5. If the user asks about health schemes, clearly explain benefits, eligibility, and required documents.
+6. Output MUST be valid JSON adhering to the specified schema.
+7. LANGUAGE MATCHING: You MUST strictly reply in the EXACT same language that the user used in their question. If they speak Hindi, reply in Hindi. If they speak English, reply in English.
 `;
 
     // Conversation history and profile facts are passed only when they are
@@ -769,7 +773,6 @@ Key direct directives:
       userProfile?.village ? `- Village: ${userProfile.village}` : null,
       userProfile?.ration_card_type ? `- Ration card: ${userProfile.ration_card_type}` : null,
       location ? `- Stated location: ${location}` : null,
-      `- Preferred language: ${language}`,
       locationShared
         ? "- The user has shared GPS coordinates, so a real hospital list is attached to this answer by the server."
         : "- The user has NOT shared a location. Do not name any specific facility, town or district.",
@@ -787,18 +790,18 @@ What is actually known about this user:
 ${contextLines}
 ${recentTurns ? `\nEarlier in this conversation:\n${recentTurns}\n` : ""}
 Instructions:
-1. Answer empathetically and clearly in ${language}.
+1. Answer empathetically and clearly. You MUST reply in the EXACT same language as the User Question.
 2. Suggest 1-2 applicable Government Health Schemes relevant to the concern (Ayushman Bharat PM-JAY, Janani Suraksha Yojana, PM Matru Vandana, Jan Aushadhi, Nikshay Poshan, RBSK and so on), with what the scheme gives and who it is for.
 3. Phrase every eligibility statement as a possibility to be checked, never as a decision — "you may be eligible based on the information available", not "you are eligible".
 4. Never invent a hospital, clinic, doctor, address or phone number. The server attaches the real facility list. Refer to it generally ("the nearest listed hospitals below") and say nothing about which facilities exist near this user.
-5. Fill 'summary' with three lists the user can act on: 'documents_required' (papers to carry), 'next_steps' (what to do, in order) and 'health_guidance' (care and precautions until then). Three to five short items each, in ${language}.
+5. Fill 'summary' with three lists the user can act on: 'documents_required' (papers to carry), 'next_steps' (what to do, in order) and 'health_guidance' (care and precautions until then). Three to five short items each. Write these lists in the EXACT same language as the User Question.
 6. Include actionable chips in 'actions' linking to schemes (/schemes/<id>) and to the facility list (/care).
 7. Populate 'related_schemes' with id, title, benefit_summary and link.
 
 Respond with structured JSON adhering to the schema.
 `;
 
-    const candidateTextModels = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-pro"];
+    const candidateTextModels = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"];
     const parsedResult = await callGeminiSafe(
       candidateTextModels,
       (gemini, model) =>
@@ -1200,7 +1203,7 @@ Format as JSON:
   "is_curated": false
 }`;
 
-    const candidateTextModels = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-pro"];
+    const candidateTextModels = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"];
     const liveResult = await callGeminiSafe(
       candidateTextModels,
       (gemini, model) =>
@@ -1395,44 +1398,40 @@ app.post("/api/image/analyze", async (req, res) => {
 
     const isHindi = language.toLowerCase().includes("hi") || language === "हिन्दी";
     const candidateVisionModels = [
-      "gemini-3.6-flash",
-      "gemini-3.7-flash",
-      "gemini-flash-latest",
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro"
+      "gemini-3.5-flash-lite",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash"
     ];
 
     const prompt = `You are Sehat Sathi's expert Indian medical document & prescription analyzer for rural and urban citizens.
 Analyze this medical document (OPD prescription, lab investigation order slip, hospital note, doctor parchi, or medicine strip).
 
 EXTRACTION INSTRUCTIONS:
-1. Extract Header & Patient Details: Hospital/Clinic name, Doctor name, Patient Name, Date, OPD No, Department.
-2. Clinical Complaints / Diagnosis: Explain any complaints (fever, chest pain, diabetes, hypertension, weakness, etc.) in simple ${language}.
-3. Prescribed Medicines (if present):
-   - Name and strength
-   - Jan Aushadhi generic salt equivalent (highlighting 50%-80% cost savings)
-   - Exact dosage & timing (e.g., 1 गोली सुबह-शाम भोजन के बाद / 1 tab twice daily after meals)
-   - Purpose in simple ${language}
-4. Ordered Diagnostic Investigations / Lab Tests (crucial for OPD slips):
-   - Name of test (e.g., Blood Sugar Fasting, Lipid Profile / Serum Cholesterol, SGOT/SGPT, Urine Routine, ECG, Echocardiography, TMT, Serum Creatinine, Uric Acid)
-   - Why doctor ordered it / Purpose in simple ${language} (e.g. दिल की जाँच, लिवर/किडनी कार्यप्रणाली, कोलेस्ट्रॉल स्तर)
-   - Patient Preparation (e.g., 8-10 घंटे खाली पेट / Fasting required)
-   - Government Facility: State that this test is available free or at low cost at Government District Hospitals, CHC, or Ayushman Arogya Mandir.
-5. Patient Next Steps: Clear bullet points on what the patient should do step-by-step.
-6. Precautions & Lifestyle: Diet advice (low salt/oil, boiled water, hydration) and precautions.
-7. Government Schemes: Mention applicable schemes (Ayushman Bharat PM-JAY ₹5L cover, Jan Aushadhi generic savings, Free Diagnostics under NHM).
-8. If the image is not a medical document at all, set "error": "This does not appear to be a medical prescription or slip. Please upload a clear doctor's prescription."
+1. MAIN PRIORITY: Transcribe EXACTLY what the doctor has written on the prescription.
+2. Extract Header & Patient Details: Hospital/Clinic name, Doctor name, Patient Name, Date, OPD No, Department.
+3. Clinical Complaints / Diagnosis / Disease: Transcribe exactly what is written, followed by a MAXIMUM 1-line simple explanation in ${language}. DO NOT over-explain.
+4. Prescribed Medicines (if present):
+   - Name and strength exactly as written.
+   - Exact dosage & timing exactly as written.
+   - Purpose of medication: MAXIMUM 1-line simple explanation in ${language}. DO NOT over-explain.
+   - Mention Jan Aushadhi generic equivalent if applicable.
+5. Ordered Diagnostic Investigations / Lab Tests:
+   - Name of test exactly as written.
+   - Purpose of test: MAXIMUM 1-line simple explanation in ${language}. DO NOT over-explain.
+6. Keep all explanations extremely brief. Focus primarily on accurate transcription.
+7. If the image is not a medical document at all, set "error": "This does not appear to be a medical prescription or slip. Please upload a clear doctor's prescription."
 
 Output ONLY valid JSON matching this schema:
 {
   "detected_document_type": "डॉक्टर पर्ची व जाँच आदेश (OPD Prescription & Investigation Order)",
+  "raw_transcription": "Exact line-by-line verbatim transcription of everything written on the document",
   "confidence": "high",
   "patient_info": {
     "hospital": "Hospital or Clinic name",
     "doctor": "Doctor name",
+    "doctor_registration": "Registration Number if visible",
     "patient_name": "Patient name",
+    "uhid": "UHID or IP No if visible",
     "date": "Date if visible",
     "department": "General / Cardiology / etc."
   },
@@ -1440,6 +1439,7 @@ Output ONLY valid JSON matching this schema:
   "medicines": [
     {
       "name": "Medicine Name & Strength",
+      "confidence": "High / Medium / Low - Handwriting unclear",
       "generic_equivalent": "Jan Aushadhi Generic Equivalent (Available at Kendra @ 80% discount)",
       "dosage": "Dosage instructions",
       "purpose": "Purpose of medication"

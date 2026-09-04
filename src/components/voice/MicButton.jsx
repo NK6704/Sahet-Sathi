@@ -38,8 +38,10 @@ export function MicButton({
     ? t('Listening…', 'सुन रही हूँ…')
     : t('Tap to speak', 'बोलने के लिए दबाएँ');
 
-  const sub = isListening
-    ? t('Tap again to pause', 'रोकने के लिए फिर दबाएँ')
+  const sub = isLoading
+    ? t('Tap to cancel', 'रद्द करने के लिए दबाएँ')
+    : isListening
+    ? t('Tap again to SEND', 'भेजने के लिए फिर दबाएँ')
     : t('In your own language', 'अपनी भाषा में');
 
   return (
@@ -48,10 +50,11 @@ export function MicButton({
         id="button-voice-microphone"
         type="button"
         onClick={onClick}
-        disabled={isLoading}
         aria-label={
           isListening
             ? t('Stop listening', 'सुनना बंद करें')
+            : isLoading
+            ? t('Stop searching', 'खोजना बंद करें')
             : t('Start speaking', 'बोलना शुरू करें')
         }
         aria-pressed={!!isListening}
