@@ -129,6 +129,7 @@ export function Care() {
   const [geo, setGeo] = useState('ask');
   const [coords, setCoords] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
+  const [locationName, setLocationName] = useState('');
   // 'locate' — the gate; 'nearby' — distance search; 'browse' — district search.
   const [view, setView] = useState('locate');
 
@@ -156,11 +157,22 @@ export function Care() {
 
     setGeo('locating');
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setAccuracy(Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null);
         setGeo('located');
         setView('nearby');
+        
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
+          const data = await res.json();
+          if (data && data.display_name) {
+            const parts = data.display_name.split(', ');
+            setLocationName(parts.slice(0, 3).join(', '));
+          }
+        } catch (e) {
+          console.warn('Reverse geocoding failed', e);
+        }
       },
       (err) => {
         // 1 PERMISSION_DENIED, 2 POSITION_UNAVAILABLE, 3 TIMEOUT.
@@ -407,9 +419,20 @@ export function Care() {
           <Card className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 p-6">
             <div className="min-w-0">
               <Eyebrow>{t('01 · Searching from', '01 · यहाँ से खोज')}</Eyebrow>
-              <p className="mt-3 font-mono text-lg text-ink">
-                {formatCoords(coords.lat, coords.lng)}
-              </p>
+              {locationName ? (
+                <>
+                  <p className="mt-3 text-lg font-bold text-ink truncate max-w-2xl" title={locationName}>
+                    {locationName}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-ink-soft">
+                    {formatCoords(coords.lat, coords.lng)}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 font-mono text-lg text-ink">
+                  {formatCoords(coords.lat, coords.lng)}
+                </p>
+              )}
               {accuracy ? (
                 <InferenceNote className="mt-3 max-w-xl">
                   {t(
