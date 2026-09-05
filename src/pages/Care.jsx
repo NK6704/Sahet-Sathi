@@ -181,7 +181,7 @@ export function Care() {
         // over and labels itself as not sorted by distance.
         setView('browse');
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }, []);
 
