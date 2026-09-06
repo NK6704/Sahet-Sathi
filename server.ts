@@ -761,6 +761,10 @@ Key direct directives:
 5. If the user asks about health schemes, clearly explain benefits, eligibility, and required documents.
 6. Output MUST be valid JSON adhering to the specified schema.
 7. LANGUAGE MATCHING: You MUST strictly reply in the EXACT same language that the user used in their question. If they speak Hindi, reply in Hindi. If they speak English, reply in English.
+  8. SPECIALIZATION MAPPING: When a user describes a health condition (e.g. chest pain, heart issue, pregnancy, fracture), YOU MUST output the matching 2-letter code in 'entities.speciality_code'. ALWAYS output a code. Codes: Cardiology for chest pain/heart (MC), Emergency (ER), General Medicine (MG), General Surgery (SG), Medical Oncology (MO), Obstetrics & Gynaecology (SO), Opthalmology for eyes (SE), Orthopaedics for bones (SB), Paediatric Medical management (MP), Urology (SU).
+  9. SCHEME IDENTIFICATION: If the user describes a condition that aligns with a specific health scheme, populate 'related_schemes' with exactly one of these objects:
+     - { "id": "pmjay-ayushman", "title": "Ayushman Bharat PM-JAY", "benefit_summary": "Up to ₹5 lakh of cashless hospital care a year for eligible families", "link": "/schemes/pmjay-ayushman" } (for major surgeries, cancer, severe illness)
+     - { "id": "janani-suraksha", "title": "Janani Suraksha Yojana (JSY)", "benefit_summary": "Cash assistance for institutional delivery", "link": "/schemes/janani-suraksha" } (for pregnancy/maternity)
 `;
 
     // Conversation history and profile facts are passed only when they are
@@ -822,6 +826,7 @@ Respond with structured JSON adhering to the schema.
                     symptoms: { type: Type.ARRAY, items: { type: Type.STRING } },
                     scheme_topic: { type: Type.STRING },
                     facility_type: { type: Type.STRING },
+                    speciality_code: { type: Type.STRING },
                   },
                 },
                 urgency: { type: Type.STRING },
@@ -882,7 +887,8 @@ Respond with structured JSON adhering to the schema.
       // teaching the client two shapes. Hospitals are attached by the server,
       // never by the model — the model has no access to the registry and any
       // facility it named would be invented.
-      const hospitals = await nearestHospitals(userLat, userLng, 3, 25);
+      const specialityCode = parsedResult.entities?.speciality_code || null;
+        const hospitals = await nearestHospitals(userLat, userLng, 3, 25, specialityCode);
       const modelSummary = parsedResult.summary ?? {};
       const asList = (value: unknown) =>
         Array.isArray(value) ? value.filter((v) => typeof v === "string" && v.trim()) : [];
@@ -918,101 +924,9 @@ Respond with structured JSON adhering to the schema.
 
     // Robust Rule-Based & Curated Fallback. `isHindi` is already resolved at
     // the top of the route; it used to be recomputed here.
-    // Check if query is about schemes
-    if (lower.includes("scheme") || lower.includes("ayushman") || lower.includes("pmjay") || lower.includes("card") || lower.includes("delivery") || lower.includes("योजना") || lower.includes("आयुष्मान") || lower.includes("पैसा")) {
-      const hospitals = await nearestHospitals(userLat, userLng, 3, 25);
-      return res.json(assistantReply({
-        intent: "scheme_search",
-        isHindi,
-        urgency: "normal",
-        entities: { scheme_topic: "Ayushman Bharat PM-JAY & Janani Suraksha" },
-        response: isHindi
-          ? "सरकारी स्वास्थ्य योजनाओं के तहत परिवार को कई लाभ मिल सकते हैं:\n1. आयुष्मान भारत (PM-JAY): पात्र परिवारों के लिए प्रति वर्ष ₹5 लाख तक का कैशलेस इलाज।\n2. जननी सुरक्षा योजना (JSY): संस्थागत प्रसव पर नकद सहायता।\n3. जन औषधि केंद्र: जेनेरिक दवाएं काफ़ी कम कीमत पर।\nराशन कार्ड और आधार लेकर निकटतम स्वास्थ्य केंद्र या CSC पर अपनी पात्रता जाँचवाएँ — पात्रता वहीं तय होती है, इस ऐप में नहीं।"
-          : "Government health schemes can give your family substantial support:\n1. Ayushman Bharat PM-JAY: up to ₹5 lakh of cashless hospital care a year for eligible families.\n2. Janani Suraksha Yojana: cash assistance for an institutional delivery.\n3. Jan Aushadhi Kendras: the same medicines at a fraction of the price.\nTake your ration card and Aadhaar to the nearest health centre or CSC to have your eligibility checked — that check happens there, not in this app.",
-        summary: {
-          documentsRequired: isHindi
-            ? ["आधार कार्ड (परिवार के हर सदस्य का)", "राशन कार्ड या SECC/पात्रता पर्ची", "मोबाइल नंबर", "पहले का इलाज हुआ हो तो पर्चे"]
-            : ["Aadhaar card for each family member", "Ration card or SECC / entitlement slip", "A mobile number", "Earlier prescriptions or discharge papers, if any"],
-          nextSteps: isHindi
-            ? ["नज़दीकी CSC, आयुष्मान आरोग्य मंदिर या सूचीबद्ध अस्पताल के आयुष्मान मित्र काउंटर पर जाएँ", "अपना नाम लाभार्थी सूची में जाँचवाएँ", "आयुष्मान कार्ड मुफ़्त बनवाएँ — किसी को पैसे न दें", "गाँव की आशा कार्यकर्ता से मदद लें"]
-            : ["Visit a CSC, an Ayushman Arogya Mandir, or the Ayushman Mitra desk at a listed hospital", "Ask them to check your name against the beneficiary list", "Have the Ayushman card made — it is free, pay nobody for it", "Ask your village ASHA worker to help with the paperwork"],
-          healthGuidance: isHindi
-            ? ["योजना का कार्ड बनने से पहले भी आपातकालीन इलाज नहीं रोका जा सकता", "इलाज से पहले अस्पताल से पूछें कि वह इस योजना में सूचीबद्ध है या नहीं"]
-            : ["Emergency treatment cannot be withheld while a card is still being made", "Before treatment, ask the hospital directly whether it is empanelled under the scheme"],
-        },
-        relatedSchemes: [
-          {
-            id: "pmjay-ayushman",
-            title: isHindi ? "आयुष्मान भारत (PM-JAY)" : "Ayushman Bharat (PM-JAY)",
-            benefitSummary: isHindi ? "पात्र परिवारों के लिए सालाना ₹5 लाख तक कैशलेस इलाज" : "Up to ₹5 lakh of cashless hospital care a year for eligible families",
-            benefit_summary: isHindi ? "पात्र परिवारों के लिए सालाना ₹5 लाख तक कैशलेस इलाज" : "Up to ₹5 lakh of cashless hospital care a year for eligible families",
-            link: "/schemes/pmjay-ayushman"
-          },
-          {
-            id: "janani-suraksha",
-            title: isHindi ? "जननी सुरक्षा योजना (JSY)" : "Janani Suraksha Yojana (JSY)",
-            benefitSummary: isHindi ? "संस्थागत प्रसव पर नकद सहायता" : "Cash assistance for an institutional delivery",
-            benefit_summary: isHindi ? "संस्थागत प्रसव पर नकद सहायता" : "Cash assistance for an institutional delivery",
-            link: "/schemes/janani-suraksha"
-          }
-        ],
-        hospitals,
-        locationShared,
-        actions: [
-          { type: "open_scheme", label: isHindi ? "आयुष्मान योजना देखें" : "View Ayushman Bharat", link: "/schemes/pmjay-ayushman" },
-          { type: "open_scheme", label: isHindi ? "जननी सुरक्षा देखें" : "View Janani Suraksha", link: "/schemes/janani-suraksha" },
-          { type: "find_care", label: isHindi ? "सूचीबद्ध अस्पताल खोजें" : "Find an empanelled hospital", link: "/care" },
-          { type: "message_asha", label: isHindi ? "आशा कार्यकर्ता से पूछें" : "Ask your ASHA worker", link: "/messages" }
-        ],
-        sourceType: "curated",
-        sources: ["National Health Authority (pmjay.gov.in)", "National Health Mission (nhm.gov.in)"],
-        confidence: 0.96,
-      }));
-    }
+    
 
-    // Check if query is about finding a clinic, doctor or hospital
-    if (lower.includes("doctor") || lower.includes("hospital") || lower.includes("clinic") || lower.includes("phc") || lower.includes("chc") || lower.includes("अस्पताल") || lower.includes("डॉक्टर") || lower.includes("दवा")) {
-      // This used to answer "Sadar Community Health Centre is 1.8 km away,
-      // call 07562-224411" to every user in the country. The centre, the
-      // distance and the number were all written into the source. What
-      // replaces them is the registry list, or an honest blank.
-      const hospitals = await nearestHospitals(userLat, userLng, 5, 25);
-      const found = hospitals.hospitals.length;
-
-      return res.json(assistantReply({
-        intent: "find_care",
-        isHindi,
-        urgency: "normal",
-        entities: { facility_type: "Empanelled hospital / Primary Health Centre" },
-        response: found > 0
-          ? (isHindi
-            ? `आपके स्थान के आसपास ${found} सूचीबद्ध अस्पताल मिले — नीचे दूरी, पता और फ़ोन नंबर के साथ दिए गए हैं। जाने से पहले फ़ोन करके पुष्टि कर लें कि जिस विभाग की ज़रूरत है वह आज खुला है। सरकारी प्राथमिक स्वास्थ्य केंद्र (PHC) और आयुष्मान आरोग्य मंदिर में आवश्यक दवाएं और बुनियादी जाँचें मुफ़्त मिलती हैं।`
-            : `There are ${found} listed hospitals near your location, shown below with distance, address and phone number. Ring ahead to confirm the department you need is open today. Government PHCs and Ayushman Arogya Mandirs provide essential medicines and basic tests free of charge.`)
-          : (isHindi
-            ? "अस्पतालों की सूची आपके स्थान के आधार पर बनती है। स्थान की अनुमति देने पर सूचीबद्ध अस्पताल दूरी के क्रम में दिखेंगे। तब तक: सरकारी PHC और आयुष्मान आरोग्य मंदिर में आवश्यक दवाएं और बुनियादी जाँचें मुफ़्त मिलती हैं, और आपकी आशा कार्यकर्ता बता सकती हैं कि गाँव के लिए कौन सा केंद्र तय है।"
-            : "The hospital list is built from your location. Allow location access and the listed hospitals will appear in order of distance. Meanwhile: government PHCs and Ayushman Arogya Mandirs provide essential medicines and basic tests free of charge, and your ASHA worker can tell you which centre your village is attached to."),
-        summary: {
-          documentsRequired: isHindi
-            ? ["आधार कार्ड", "आयुष्मान कार्ड, यदि बना हो", "पहले के पर्चे और जाँच रिपोर्ट"]
-            : ["Aadhaar card", "Ayushman card, if you have one", "Earlier prescriptions and test reports"],
-          nextSteps: isHindi
-            ? ["जाने से पहले अस्पताल को फ़ोन करके OPD का समय पूछें", "आयुष्मान के तहत इलाज चाहिए तो आयुष्मान मित्र काउंटर पर जाएँ", "आपात स्थिति में 108 पर एम्बुलेंस बुलाएँ, इंतज़ार न करें"]
-            : ["Phone the hospital before travelling and ask its OPD hours", "For treatment under Ayushman Bharat, go to the Ayushman Mitra desk", "In an emergency call 108 for an ambulance rather than travelling on your own"],
-          healthGuidance: isHindi
-            ? ["सभी पुरानी रिपोर्ट एक फ़ाइल में साथ रखें", "जो दवाएं चल रही हैं उनके नाम लिखकर ले जाएँ"]
-            : ["Keep all past reports together in one folder", "Write down the names of medicines you are already taking and carry the list"],
-        },
-        hospitals,
-        locationShared,
-        actions: [
-          { type: "find_care", label: isHindi ? "सभी नज़दीकी अस्पताल देखें" : "See all nearby hospitals", link: "/care" },
-          { type: "message_asha", label: isHindi ? "आशा कार्यकर्ता से पूछें" : "Ask your ASHA worker", link: "/messages" }
-        ],
-        sourceType: "registry",
-        sources: ["National Health Authority PM-JAY empanelled hospital registry"],
-        confidence: found > 0 ? 0.95 : 0.6,
-      }));
-    }
+    
 
     // General Health Guidance Fallback
     return res.json(assistantReply({

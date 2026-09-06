@@ -51,6 +51,21 @@ import { admin } from "../lib/supabaseAdmin";
    is precisely where somebody holding an Ayushman card must not be sent.
    ===================================================================== */
 
+
+const SPECIALITY_MAP: Record<string, string> = {
+  'MC': '100002', // Cardiology
+  'SE': '100013', // Ophthalmology
+  'SB': '100015', // Orthopaedics
+  'SO': '100012', // Obstetrics & Gynaecology
+  'MP': '100017', // Paediatric Medical management
+  'SU': '100023', // Urology
+  'ER': '100001', // Emergency Room
+  'MG': '100001', // General Medicine
+  'SG': '100006', // General Surgery
+  'MO': '100008', // Medical Oncology
+  'MN': '100010', // Neo-natal care
+};
+
 export const hospitalsRouter = Router();
 
 // ---------------------------------------------------------------------
@@ -415,7 +430,7 @@ hospitalsRouter.get(
       p_lng: lng,
       p_radius_km: radiusKm,
       p_type: typeCode,
-      p_speciality: speciality,
+      p_speciality: speciality ? (SPECIALITY_MAP[speciality] || speciality) : null,
       p_limit: limit,
       p_offset: offset,
     });
@@ -467,6 +482,7 @@ export async function nearestHospitals(
   lng: unknown,
   limit = 3,
   radiusKm = 25,
+  speciality: string | null = null,
 ): Promise<{ hospitals: Record<string, unknown>[]; note: string | null }> {
   const latitude = typeof lat === "number" ? lat : Number(lat);
   const longitude = typeof lng === "number" ? lng : Number(lng);
@@ -500,7 +516,7 @@ export async function nearestHospitals(
       p_lng: longitude,
       p_radius_km: clamp(radiusKm, 1, 100),
       p_type: null,
-      p_speciality: null,
+      p_speciality: speciality ? (SPECIALITY_MAP[speciality] || speciality) : null,
       p_limit: clamp(Math.trunc(limit), 1, 20),
       p_offset: 0,
     });
@@ -595,7 +611,7 @@ hospitalsRouter.get(
     if (districtCode !== null) query = query.eq("district_code", districtCode);
     if (typeCode !== null) query = query.eq("type_code", typeCode);
     if (speciality !== null) {
-      query = query.contains("speciality_codes", [speciality]);
+      query = query.contains("speciality_codes", [SPECIALITY_MAP[speciality] || speciality]);
     }
 
     const result = await query

@@ -156,6 +156,7 @@ export function Care() {
     }
 
     setGeo('locating');
+    setLocationName('');
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
@@ -164,14 +165,43 @@ export function Care() {
         setView('nearby');
         
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
-          const data = await res.json();
-          if (data && data.display_name) {
-            const parts = data.display_name.split(', ');
-            setLocationName(parts.slice(0, 3).join(', '));
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.address) {
+              const a = data.address;
+              const place = a.village || a.suburb || a.city_district || a.city || a.town || a.county || '';
+              const state = a.state || '';
+              setLocationName([place, state].filter(Boolean).join(', ') || data.display_name);
+              return;
+            } else if (data && data.display_name) {
+              const parts = data.display_name.split(', ');
+              setLocationName(parts.slice(0, 3).join(', '));
+              return;
+            }
           }
         } catch (e) {
-          console.warn('Reverse geocoding failed', e);
+          console.warn('Nominatim geocoding failed', e);
+        }
+
+        // Fallback to BigDataCloud if Nominatim failed or was rate-limited
+        try {
+          const res2 = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&localityLanguage=en`
+          );
+          if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2 && data2.city && data2.principalSubdivision) {
+              setLocationName(`${data2.city}, ${data2.principalSubdivision}`);
+            } else if (data2 && data2.locality) {
+              setLocationName(`${data2.locality}, ${data2.principalSubdivision}`);
+            }
+          }
+        } catch (e) {
+          console.warn('BigDataCloud geocoding failed', e);
         }
       },
       (err) => {
@@ -218,15 +248,11 @@ export function Care() {
   const specialities = meta.data?.specialities ?? [];
   const coverage = meta.data?.coverage ?? null;
 
-  // Districts for the selected state, real names first. A row still
-  // named 'District 271' is a code wearing a name, so it is labelled
-  // as a code rather than offered as one.
   const districts = useMemo(() => {
     const rows = (meta.data?.districts ?? []).filter(
-      (d) => !stateCode || String(d.stateCode) === String(stateCode),
+      (d) => (!stateCode || String(d.stateCode) === String(stateCode)) && !d.placeholder,
     );
     return [...rows].sort((a, b) => {
-      if (a.placeholder !== b.placeholder) return a.placeholder ? 1 : -1;
       return String(a.name).localeCompare(String(b.name));
     });
   }, [meta.data, stateCode]);
